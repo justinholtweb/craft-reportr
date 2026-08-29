@@ -1,0 +1,607 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set selectedSubnavItem = 'reports' %}
+{% set fullPageForm = true %}
+{% set crumbs = [{ label: 'Reports'|t('reportr'), url: url('reportr/reports') }] %}
+
+{% set spec = report.querySpec %}
+{% set options = report.formatOptions %}
+{% set schedule = report.schedule %}
+{% set delivery = report.delivery %}
+
+{% set paramRows = [] %}
+{% for param in report.params %}
+    {% set paramRows = paramRows|merge([{
+        name: param.name,
+        label: param.label,
+        type: param.type,
+        required: param.required,
+        default: param.default is iterable ? param.default|join(', ') : param.default,
+        options: param.optionsText,
+        instructions: param.instructions,
+    }]) %}
+{% endfor %}
+
+{% set columnRows = [] %}
+{% for column in spec.columns %}
+    {% set columnRows = columnRows|merge([{
+        key: column.key,
+        heading: column.heading,
+        format: column.format,
+        separator: column.separator,
+    }]) %}
+{% endfor %}
+
+{% block content %}
+    <input type="hidden" name="action" value="reportr/reports/save">
+    {{ redirectInput('reportr/reports/{id}') }}
+    {% if not isNew %}<input type="hidden" name="reportId" value="{{ report.id }}">{% endif %}
+
+    {{ forms.textField({
+        first: true,
+        label: 'Name'|t('app'),
+        id: 'title',
+        name: 'title',
+        value: report.title,
+        errors: report.getErrors('title'),
+        autofocus: true,
+        required: true,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Handle'|t('app'),
+        instructions: 'How the console command and Twig refer to this report. `php craft reportr/reports/build --report=monthly-orders` — a name that survives a database refresh, unlike an ID.'|t('reportr')|md(inlineOnly=true),
+        id: 'handle',
+        name: 'handle',
+        class: 'code',
+        value: report.handle,
+        errors: report.getErrors('handle'),
+    }) }}
+
+    {{ forms.textareaField({
+        label: 'Description'|t('app'),
+        name: 'description',
+        rows: 2,
+        value: report.description,
+    }) }}
+
+    {{ forms.selectField({
+        label: 'Type'|t('reportr'),
+        id: 'report-type',
+        name: 'type',
+        options: typeOptions,
+        value: report.type,
+        errors: report.getErrors('type'),
+    }) }}
+
+    <div id="type-template" class="reportr-type-pane">
+        <hr>
+        <h2>{{ 'Template'|t('reportr') }}</h2>
+
+        {{ forms.textField({
+            label: 'Template'|t('app'),
+            instructions: 'A path inside your site templates folder, without the extension. The template is given a `report` variable to build rows on, and a `params` hash of this run’s answers.'|t('reportr')|md(inlineOnly=true),
+            name: 'template',
+            class: 'code',
+            value: report.template,
+            errors: report.getErrors('template'),
+        }) }}
+
+        <div id="type-advanced" class="reportr-type-pane">
+            {{ forms.selectField({
+                label: 'Formatting function'|t('reportr'),
+                instructions: 'From `config/reportr.php` — or `config/labreports.php`, which Reportr also reads unless you turn that off in its settings. The function takes one element and returns one row.'|t('reportr')|md(inlineOnly=true),
+                name: 'formatFunction',
+                options: functionOptions,
+                value: report.formatFunction,
+                errors: report.getErrors('formatFunction'),
+            }) }}
+
+            {% if functionOptions|length <= 1 %}
+                <p class="warning">{{ 'No formatting functions are defined. Add them to the `functions` array in `config/reportr.php`.'|t('reportr')|md(inlineOnly=true) }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="type-query" class="reportr-type-pane">
+        <hr>
+        <h2>{{ 'Query'|t('reportr') }}</h2>
+        <p class="light">{{ 'No template needed. Pick what to report on and which columns to include.'|t('reportr') }}</p>
+
+        {{ forms.selectField({
+            label: 'Element type'|t('reportr'),
+            id: 'element-type',
+            name: 'querySpec[elementType]',
+            options: elementTypeOptions,
+            value: spec.elementType,
+        }) }}
+
+        {{ forms.selectField({
+            label: 'Source'|t('reportr'),
+            instructions: 'The same sources as that element type’s own index, so a report can be pointed at a saved source and keeps meaning what that source means.'|t('reportr'),
+            id: 'query-source',
+            name: 'querySpec[source]',
+            options: sourceOptions,
+            value: spec.source,
+        }) }}
+
+        {{ forms.selectField({
+            label: 'Status'|t('app'),
+            name: 'querySpec[status]',
+            options: [
+                { label: 'The element type’s default'|t('reportr'), value: '' },
+                { label: 'Enabled'|t('app'), value: 'enabled' },
+                { label: 'Disabled'|t('app'), value: 'disabled' },
+                { label: 'Live'|t('app'), value: 'live' },
+                { label: 'Any'|t('app'), value: 'any' },
+            ],
+            value: spec.status,
+        }) }}
+
+        <div class="flex">
+            {{ forms.textField({
+                label: 'Order by'|t('reportr'),
+                name: 'querySpec[orderBy]',
+                class: 'code',
+                width: 40,
+                placeholder: 'postDate',
+                value: spec.orderBy,
+            }) }}
+
+            {{ forms.selectField({
+                label: 'Direction'|t('reportr'),
+                name: 'querySpec[direction]',
+                options: [
+                    { label: 'Ascending'|t('app'), value: 'asc' },
+                    { label: 'Descending'|t('app'), value: 'desc' },
+                ],
+                value: spec.direction,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Limit'|t('app'),
+                name: 'querySpec[limit]',
+                type: 'number',
+                size: 8,
+                value: spec.limit,
+            }) }}
+        </div>
+
+        {{ forms.editableTableField({
+            label: 'Columns'|t('reportr'),
+            instructions: 'Choose a column, or type a key by hand: `attr:title`, `field:bookAuthor.title` to walk into a related element, `field:priceTable.amount` to pull one column out of a Table field, or `twig:{{ object.title|upper }}` for anything else.'|t('reportr')|md(inlineOnly=true),
+            id: 'query-columns',
+            name: 'querySpec[columns]',
+            cols: {
+                key: { heading: 'Column'|t('reportr'), type: 'select', options: columnOptions, class: 'code' },
+                heading: { heading: 'Heading'|t('reportr'), type: 'singleline' },
+                format: { heading: 'Format'|t('reportr'), type: 'select', options: columnFormatOptions },
+                separator: { heading: 'Separator'|t('reportr'), type: 'singleline', width: 80 },
+            },
+            rows: columnRows,
+            addRowLabel: 'Add a column'|t('reportr'),
+            allowAdd: true,
+            allowDelete: true,
+            allowReorder: true,
+        }) }}
+    </div>
+
+    <hr>
+    <h2>{{ 'Parameters'|t('reportr') }}</h2>
+    <p class="light">{{ 'Questions the report asks before it runs. Answers arrive in the template as `params.name`, already typed — a date parameter is a DateTime, an entries parameter is an entry.'|t('reportr')|md(inlineOnly=true) }}</p>
+
+    {{ forms.editableTableField({
+        label: false,
+        id: 'params',
+        name: 'params',
+        cols: {
+            name: { heading: 'Name'|t('reportr'), type: 'singleline', class: 'code', width: 130 },
+            label: { heading: 'Label'|t('reportr'), type: 'singleline' },
+            type: { heading: 'Type'|t('reportr'), type: 'select', options: paramTypeOptions },
+            required: { heading: 'Required'|t('reportr'), type: 'checkbox', thin: true },
+            default: { heading: 'Default'|t('reportr'), type: 'singleline', info: 'Dates accept relative expressions — `-7 days` means seven days before each run, which is what makes a scheduled report worth scheduling.'|t('reportr')|md(inlineOnly=true) },
+            options: { heading: 'Options'|t('reportr'), type: 'multiline', info: 'For dropdowns and checkboxes. One per line, each optionally `value: Label`.'|t('reportr')|md(inlineOnly=true) },
+            instructions: { heading: 'Instructions'|t('reportr'), type: 'singleline' },
+        },
+        rows: paramRows,
+        addRowLabel: 'Add a parameter'|t('reportr'),
+        allowAdd: true,
+        allowDelete: true,
+        allowReorder: true,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Output'|t('reportr') }}</h2>
+
+    {{ forms.selectField({
+        label: 'Format'|t('reportr'),
+        id: 'report-format',
+        name: 'format',
+        options: formatOptions,
+        value: report.format,
+        errors: report.getErrors('format'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Filename'|t('reportr'),
+        instructions: 'Tokens: `{handle}` `{title}` `{date}` `{time}` `{datetime}` `{timestamp}` `{Y}` `{m}` `{d}` and `{param:name}`. The extension is added for you.'|t('reportr')|md(inlineOnly=true),
+        name: 'filenameFormat',
+        class: 'code',
+        placeholder: '{handle}-{datetime}',
+        value: report.filenameFormat,
+    }) }}
+
+    <div id="format-delimited" class="reportr-format-pane">
+        <div class="flex">
+            {{ forms.textField({
+                label: 'Delimiter'|t('reportr'),
+                name: 'formatOptions[delimiter]',
+                width: 20,
+                value: options.delimiter == "\t" ? 'tab' : options.delimiter,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Enclosure'|t('reportr'),
+                name: 'formatOptions[enclosure]',
+                width: 20,
+                value: options.enclosure,
+            }) }}
+        </div>
+
+        {{ forms.lightswitchField({
+            label: 'Write a byte-order mark'|t('reportr'),
+            instructions: 'Three bytes that tell Excel on Windows the file is UTF-8. Without them every accented name in the export arrives mangled.'|t('reportr'),
+            name: 'formatOptions[bom]',
+            on: options.bom,
+        }) }}
+
+        {{ forms.lightswitchField({
+            label: 'Neutralise spreadsheet formulas'|t('reportr'),
+            instructions: 'A cell starting `=`, `+`, `-` or `@` runs as a formula when the file is opened, so an export of anything the public typed is a way to run code on the machine of whoever opens it. Leave this on unless something downstream needs the raw text.'|t('reportr')|md(inlineOnly=true),
+            name: 'formatOptions[escapeFormulas]',
+            on: options.escapeFormulas,
+        }) }}
+    </div>
+
+    <div id="format-xlsx" class="reportr-format-pane">
+        {{ forms.textField({
+            label: 'Sheet name'|t('reportr'),
+            name: 'formatOptions[sheetName]',
+            value: options.sheetName,
+        }) }}
+    </div>
+
+    <div id="format-xml" class="reportr-format-pane">
+        <div class="flex">
+            {{ forms.textField({
+                label: 'Root element'|t('reportr'),
+                name: 'formatOptions[xmlRoot]',
+                class: 'code',
+                width: 40,
+                value: options.xmlRoot,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Row element'|t('reportr'),
+                name: 'formatOptions[xmlRow]',
+                class: 'code',
+                width: 40,
+                value: options.xmlRow,
+            }) }}
+        </div>
+    </div>
+
+    <div id="format-json" class="reportr-format-pane">
+        {{ forms.lightswitchField({
+            label: 'Objects keyed by heading'|t('reportr'),
+            instructions: 'Off gives positional arrays, which are smaller and harder to read.'|t('reportr'),
+            name: 'formatOptions[keyed]',
+            on: options.keyed,
+        }) }}
+
+        {{ forms.lightswitchField({
+            label: 'Pretty-print'|t('reportr'),
+            name: 'formatOptions[pretty]',
+            on: options.pretty,
+        }) }}
+    </div>
+
+    {{ forms.lightswitchField({
+        label: 'Include a header row'|t('reportr'),
+        name: 'formatOptions[headers]',
+        on: options.headers,
+    }) }}
+
+    {{ forms.textField({
+        label: 'List separator'|t('reportr'),
+        instructions: 'How a cell holding several values is joined — related entries, checkbox answers, a table column.'|t('reportr'),
+        name: 'formatOptions[listSeparator]',
+        width: 20,
+        value: options.listSeparator,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Storage'|t('reportr') }}</h2>
+
+    {{ forms.selectField({
+        label: 'Filesystem'|t('reportr'),
+        instructions: 'Where the finished file goes. Anything with an ephemeral disk — Heroku, a scaled container, a read-only image — needs a real filesystem here, or every report vanishes on the next restart.'|t('reportr'),
+        name: 'fsHandle',
+        options: fsOptions,
+        value: report.fsHandle,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Subfolder'|t('reportr'),
+        name: 'fsSubpath',
+        class: 'code',
+        placeholder: 'reports',
+        value: report.fsSubpath,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Schedule'|t('reportr') }}</h2>
+
+    {{ forms.selectField({
+        label: 'Run this report'|t('reportr'),
+        id: 'schedule-frequency',
+        name: 'schedule[frequency]',
+        options: frequencyOptions,
+        value: schedule.frequency,
+    }) }}
+
+    <div id="schedule-detail" class="reportr-schedule-pane">
+        <div class="flex">
+            {{ forms.textField({
+                label: 'At'|t('reportr'),
+                name: 'schedule[time]',
+                width: 30,
+                placeholder: '06:00',
+                value: schedule.time,
+            }) }}
+
+            {{ forms.selectField({
+                label: 'On'|t('reportr'),
+                id: 'schedule-weekday',
+                name: 'schedule[weekday]',
+                options: weekdayOptions,
+                value: schedule.weekday,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Day of the month'|t('reportr'),
+                id: 'schedule-monthday',
+                name: 'schedule[monthday]',
+                type: 'number',
+                size: 4,
+                value: schedule.monthday,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Minutes past the hour'|t('reportr'),
+                id: 'schedule-minute',
+                name: 'schedule[minute]',
+                type: 'number',
+                size: 4,
+                value: schedule.minute,
+            }) }}
+        </div>
+    </div>
+
+    <hr>
+    <h2>{{ 'Delivery'|t('reportr') }}</h2>
+
+    {{ forms.selectField({
+        label: 'Email the result'|t('reportr'),
+        name: 'delivery[when]',
+        options: deliveryOptions,
+        value: delivery.when,
+    }) }}
+
+    {{ forms.textareaField({
+        label: 'Recipients'|t('reportr'),
+        instructions: 'One address per line. Environment variables work here, so `$REPORT_RECIPIENTS` keeps addresses out of project config.'|t('reportr')|md(inlineOnly=true),
+        name: 'delivery[recipients]',
+        rows: 3,
+        value: delivery.recipients|join("\n"),
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: 'Attach the file'|t('reportr'),
+        instructions: 'Over the size limit in Reportr’s settings the email still goes, with a link instead.'|t('reportr'),
+        name: 'delivery[attach]',
+        on: delivery.attach,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Subject'|t('reportr'),
+        instructions: 'Optional. `{report}`, `{status}` and `{rows}` are replaced.'|t('reportr')|md(inlineOnly=true),
+        name: 'delivery[subject]',
+        value: delivery.subject,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Housekeeping'|t('reportr') }}</h2>
+
+    <div class="flex">
+        {{ forms.textField({
+            label: 'Keep the last'|t('reportr'),
+            instructions: 'runs. Blank uses the site default.'|t('reportr'),
+            name: 'retentionRuns',
+            type: 'number',
+            size: 6,
+            value: report.retentionRuns,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Keep for'|t('reportr'),
+            instructions: 'days. Blank uses the site default.'|t('reportr'),
+            name: 'retentionDays',
+            type: 'number',
+            size: 6,
+            value: report.retentionDays,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Batch size'|t('reportr'),
+            instructions: 'Rows fetched at a time. Lower it if a big report runs out of memory.'|t('reportr'),
+            name: 'batchSize',
+            type: 'number',
+            size: 6,
+            value: report.batchSize,
+        }) }}
+    </div>
+{% endblock %}
+
+{% block details %}
+    <div class="meta">
+        {{ forms.lightswitchField({
+            label: 'Enabled'|t('app'),
+            name: 'enabled',
+            on: report.enabled,
+        }) }}
+    </div>
+
+    {% if not isNew %}
+        <div class="meta read-only">
+            <div class="data">
+                <div class="heading">{{ 'Runs'|t('reportr') }}</div>
+                <div class="value"><a href="{{ url('reportr/runs', { reportId: report.id }) }}">{{ report.runCount }}</a></div>
+            </div>
+            {% if report.lastRunAt %}
+                <div class="data">
+                    <div class="heading">{{ 'Last run'|t('reportr') }}</div>
+                    <div class="value">{{ report.lastRunAt|datetime('short') }}</div>
+                </div>
+            {% endif %}
+            {% if report.nextRunAt %}
+                <div class="data">
+                    <div class="heading">{{ 'Next run'|t('reportr') }}</div>
+                    <div class="value">{{ report.nextRunAt|datetime('short') }}</div>
+                </div>
+            {% endif %}
+        </div>
+
+        {% set problem = report.blockingProblem %}
+        {% if problem %}
+            <p class="error" style="padding: 0 24px;">{{ problem }}</p>
+        {% else %}
+            <div class="buttons" style="padding: 0 24px;">
+                <a href="{{ report.runUrl }}" class="btn">{{ 'Run report'|t('reportr') }}</a>
+            </div>
+        {% endif %}
+
+        {# Posted from JavaScript, never as a nested <form>. A form inside the page form is
+           invalid HTML: the parser drops the inner tag and keeps its children, so a hidden
+           `action=…/delete` ends up beside the save action and clicking Save deletes the
+           report. #}
+        <div class="buttons" style="padding: 0 24px 24px;">
+            <button type="button" id="reportr-delete" class="btn delete">{{ 'Delete'|t('app') }}</button>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% css %}
+.reportr-type-pane, .reportr-format-pane, .reportr-schedule-pane { display: none; }
+.reportr-type-pane.is-visible, .reportr-format-pane.is-visible, .reportr-schedule-pane.is-visible { display: block; }
+{% endcss %}
+
+{% js %}
+(function() {
+    var typeSelect = document.getElementById('report-type');
+    var formatSelect = document.getElementById('report-format');
+    var frequencySelect = document.getElementById('schedule-frequency');
+
+    function show(id, visible) {
+        var pane = document.getElementById(id);
+        if (pane) {
+            pane.classList.toggle('is-visible', !!visible);
+        }
+    }
+
+    function syncType() {
+        var type = typeSelect ? typeSelect.value : 'basic';
+        show('type-template', type === 'basic' || type === 'advanced');
+        show('type-advanced', type === 'advanced');
+        show('type-query', type === 'query');
+    }
+
+    function syncFormat() {
+        var format = formatSelect ? formatSelect.value : 'csv';
+        show('format-delimited', format === 'csv' || format === 'tsv');
+        show('format-xlsx', format === 'xlsx');
+        show('format-xml', format === 'xml');
+        show('format-json', format === 'json' || format === 'ndjson');
+    }
+
+    function syncSchedule() {
+        var frequency = frequencySelect ? frequencySelect.value : 'never';
+        show('schedule-detail', frequency !== 'never');
+
+        var weekday = document.getElementById('schedule-weekday');
+        var monthday = document.getElementById('schedule-monthday');
+        var minute = document.getElementById('schedule-minute');
+
+        if (weekday) { weekday.closest('.field').style.display = frequency === 'weekly' ? '' : 'none'; }
+        if (monthday) { monthday.closest('.field').style.display = frequency === 'monthly' ? '' : 'none'; }
+        if (minute) { minute.closest('.field').style.display = frequency === 'hourly' ? '' : 'none'; }
+    }
+
+    if (typeSelect) { typeSelect.addEventListener('change', syncType); }
+    if (formatSelect) { formatSelect.addEventListener('change', syncFormat); }
+    if (frequencySelect) { frequencySelect.addEventListener('change', syncSchedule); }
+
+    syncType();
+    syncFormat();
+    syncSchedule();
+
+    var elementTypeSelect = document.getElementById('element-type');
+
+    if (elementTypeSelect) {
+        elementTypeSelect.addEventListener('change', function() {
+            Craft.sendActionRequest('POST', 'reportr/reports/query-options', {
+                data: { elementType: elementTypeSelect.value }
+            }).then(function(response) {
+                var sourceSelect = document.getElementById('query-source');
+
+                if (sourceSelect) {
+                    sourceSelect.innerHTML = '';
+                    response.data.sources.forEach(function(source) {
+                        var option = document.createElement('option');
+                        option.value = source.value;
+                        option.textContent = source.label;
+                        sourceSelect.appendChild(option);
+                    });
+                }
+
+                // The column picker's options live on the editable table's JS instance as well
+                // as in the DOM, so a fresh row would otherwise offer the old element type's
+                // columns. Tell the user rather than half-updating it.
+                Craft.cp.displayNotice(Craft.t('reportr', 'Save and reopen this report to refresh the column list.'));
+            });
+        });
+    }
+
+    var deleteButton = document.getElementById('reportr-delete');
+
+    if (deleteButton) {
+        deleteButton.addEventListener('click', function() {
+            if (!confirm(Craft.t('reportr', 'Delete this report? Its past runs are kept.'))) {
+                return;
+            }
+
+            deleteButton.classList.add('loading');
+
+            Craft.sendActionRequest('POST', 'reportr/reports/delete', {
+                data: { reportId: {{ report.id ?? 'null' }} }
+            }).then(function() {
+                window.location.href = Craft.getCpUrl('reportr/reports');
+            }).catch(function() {
+                deleteButton.classList.remove('loading');
+                Craft.cp.displayError(Craft.t('reportr', 'Couldn’t delete the report.'));
+            });
+        });
+    }
+})();
+{% endjs %}

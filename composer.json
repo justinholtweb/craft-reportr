@@ -1,0 +1,63 @@
+{
+    "name": "justinholtweb/craft-reportr",
+    "description": "Content and data reports for Craft CMS — template or point-and-click, with run-time parameters, seven export formats, scheduling, email delivery and storage on any filesystem.",
+    "version": "5.0.0",
+    "type": "craft-plugin",
+    "keywords": [
+        "craftcms",
+        "craft-plugin",
+        "reports",
+        "reporting",
+        "export",
+        "csv",
+        "xlsx",
+        "data",
+        "scheduled-reports",
+        "lab-reports"
+    ],
+    "license": "proprietary",
+    "homepage": "https://craft-reportr.com",
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://justinholt.com"
+        }
+    ],
+    "support": {
+        "email": "justin@justinholt.com",
+        "issues": "https://github.com/justinholtweb/craft-reportr/issues",
+        "source": "https://github.com/justinholtweb/craft-reportr"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "craftcms/cms": "^5.3.0"
+    },
+    "suggest": {
+        "ext-zip": "Required for the XLSX export format."
+    },
+    "autoload": {
+        "psr-4": {
+            "justinholtweb\\reportr\\": "src/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "yiisoft/yii2-composer": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "name": "Reportr",
+        "handle": "reportr",
+        "developer": "Justin Holt",
+        "developerUrl": "https://justinholt.com",
+        "documentationUrl": "https://github.com/justinholtweb/craft-reportr/blob/main/README.md",
+        "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-reportr/main/CHANGELOG.md",
+        "class": "justinholtweb\\reportr\\Plugin",
+        "hasCpSettings": true
+    }
+}

@@ -1,0 +1,25 @@
+{% set colours = {
+    queued: 'gray',
+    running: 'blue',
+    finished: 'green',
+    error: 'red',
+} %}
+
+<div class="reportr-status-banner">
+    <span class="status {{ colours[run.runStatus] ?? 'gray' }}"></span>
+    <span>
+        {% if run.runStatus == 'finished' %}
+            {{ '{rows} rows written to {filename}.'|t('reportr', { rows: run.totalRows|number, filename: run.filename }) }}
+        {% elseif run.runStatus == 'error' %}
+            {{ 'This run did not finish.'|t('reportr') }}
+        {% elseif run.runStatus == 'running' %}
+            {{ 'Building — {rows} rows so far.'|t('reportr', { rows: run.totalRows|number }) }}
+        {% else %}
+            {{ 'Queued. It will start when the queue next runs.'|t('reportr') }}
+        {% endif %}
+    </span>
+</div>
+
+{% css %}
+.reportr-status-banner { display: flex; align-items: center; gap: .5rem; margin-bottom: 1.5rem; font-size: 14px; }
+{% endcss %}

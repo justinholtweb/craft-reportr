@@ -1,0 +1,79 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set selectedSubnavItem = 'import' %}
+{% set title = 'Import from Lab Reports'|t('reportr') %}
+{% set crumbs = [{ label: 'Reportr'|t('reportr'), url: url('reportr/reports') }] %}
+
+{% block content %}
+    {% if not available %}
+        <p>{{ 'No Lab Reports tables were found in this database, so there is nothing to import.'|t('reportr') }}</p>
+    {% else %}
+        <p>
+            {{ 'Found {reports} configured reports and {runs} generated reports. {imported} have already been imported.'|t('reportr', {
+                reports: counts.reports,
+                runs: counts.runs,
+                imported: counts.imported,
+            }) }}
+        </p>
+
+        <p class="light">
+            {{ 'Your report **templates do not need changing**. Reportr’s basic and advanced types call the same methods on the same `report` variable, and advanced reports keep using the formatting functions in `config/labreports.php`. Nothing in the Lab Reports tables is modified, and the import can safely be run twice — anything already brought across is skipped.'|t('reportr')|md }}
+        </p>
+
+        {% if legacyFolder %}
+            <p class="light">{{ 'Report files will be copied from `{folder}`.'|t('reportr', { folder: legacyFolder })|md(inlineOnly=true) }}</p>
+        {% else %}
+            <p class="warning">{{ 'The old report folder could not be found, so files will not be copied. The configurations and the history still import.'|t('reportr') }}</p>
+        {% endif %}
+
+        <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            <input type="hidden" name="action" value="reportr/import/run">
+
+            {{ forms.checkboxField({
+                label: 'Bring the run history across'|t('reportr'),
+                name: 'includeRuns',
+                checked: true,
+            }) }}
+
+            {{ forms.checkboxField({
+                label: 'Copy the generated files'|t('reportr'),
+                name: 'copyFiles',
+                checked: true,
+            }) }}
+
+            <div class="buttons">
+                <button type="submit" name="dryRun" value="1" class="btn submit">{{ 'Dry run'|t('reportr') }}</button>
+                <button type="submit" name="dryRun" value="0" class="btn">{{ 'Import'|t('reportr') }}</button>
+            </div>
+        </form>
+    {% endif %}
+
+    {% if summary %}
+        <hr>
+        <h2>{{ summary.dryRun ? 'What would happen'|t('reportr') : 'What happened'|t('reportr') }}</h2>
+
+        <table class="data fullwidth">
+            <tbody>
+                <tr><th>{{ 'Reports imported'|t('reportr') }}</th><td>{{ summary.reportsImported }} {% if summary.reportsSkipped %}<span class="light">({{ summary.reportsSkipped }} already there)</span>{% endif %}</td></tr>
+                <tr><th>{{ 'Runs imported'|t('reportr') }}</th><td>{{ summary.runsImported }} {% if summary.runsSkipped %}<span class="light">({{ summary.runsSkipped }} already there)</span>{% endif %}</td></tr>
+                <tr><th>{{ 'Files copied'|t('reportr') }}</th><td>{{ summary.filesCopied }} {% if summary.filesMissing %}<span class="light">({{ summary.filesMissing }} missing)</span>{% endif %}</td></tr>
+            </tbody>
+        </table>
+
+        {% if summary.warnings|length %}
+            <h3>{{ 'Warnings'|t('reportr') }}</h3>
+            <ul class="errors">
+                {% for warning in summary.warnings %}<li>{{ warning }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if summary.log|length %}
+            <h3>{{ 'Detail'|t('reportr') }}</h3>
+            <ul>
+                {% for line in summary.log %}<li>{{ line }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    {% endif %}
+{% endblock %}

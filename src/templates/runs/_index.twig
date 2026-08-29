@@ -1,0 +1,12 @@
+{% extends '_layouts/elementindex' %}
+
+{% set title = 'Runs'|t('reportr') %}
+{% set elementType = 'justinholtweb\\reportr\\elements\\Run' %}
+{% set selectedSubnavItem = 'runs' %}
+
+{# Arriving from a report's "N runs" link opens that report's source rather than everything.
+   Craft remembers the last source per index in local storage, so this only applies when a source
+   is actually asked for. #}
+{% if report is defined and report %}
+    {% set defaultSource = 'report:' ~ report.uid %}
+{% endif %}

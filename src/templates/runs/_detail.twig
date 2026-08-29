@@ -1,0 +1,182 @@
+{% extends '_layouts/cp' %}
+
+{% set selectedSubnavItem = 'runs' %}
+{% set title = run.uiLabel %}
+{% set crumbs = [
+    { label: 'Runs'|t('reportr'), url: url('reportr/runs') },
+] %}
+
+{% if report %}
+    {% set crumbs = crumbs|merge([{ label: report.title, url: report.cpEditUrl }]) %}
+{% endif %}
+
+{% set params = run.describeParams() %}
+{% set finished = run.runStatus in ['finished', 'error'] %}
+
+{% block content %}
+    <div id="reportr-status">
+        {% include 'reportr/runs/_status' with { run: run } only %}
+    </div>
+
+    {% if params|length %}
+        <h2>{{ 'Parameters'|t('reportr') }}</h2>
+        <table class="data fullwidth">
+            <tbody>
+                {% for label, value in params %}
+                    <tr>
+                        <th style="width: 30%;">{{ label }}</th>
+                        <td>{{ value }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    {% if run.statusMessage %}
+        <h2>{{ 'What happened'|t('reportr') }}</h2>
+        <pre class="reportr-message">{{ run.statusMessage }}</pre>
+    {% endif %}
+
+    {% set points = [] %}
+    {% for previous in history|reverse %}
+        {% if previous.runStatus == 'finished' %}
+            {% set points = points|merge([previous.totalRows]) %}
+        {% endif %}
+    {% endfor %}
+
+    {% if points|length > 2 %}
+        <h2>{{ 'Rows over the last {count} runs'|t('reportr', { count: points|length }) }}</h2>
+        {# Drawn here rather than with a charting library: it is a polyline, and a report plugin
+           that pulls in a charting bundle to draw one has made a poor trade. #}
+        {% set maximum = max(points) ?: 1 %}
+        {% set step = points|length > 1 ? 100 / (points|length - 1) : 100 %}
+        {% set coordinates = [] %}
+        {% for index, value in points %}
+            {% set coordinates = coordinates|merge([(index * step)|round(2) ~ ',' ~ (30 - (value / maximum * 28))|round(2)]) %}
+        {% endfor %}
+        <svg viewBox="0 0 100 30" preserveAspectRatio="none" role="img"
+             aria-label="{{ 'Rows written by each of the last {count} runs'|t('reportr', { count: points|length }) }}"
+             style="width: 100%; height: 60px; overflow: visible;">
+            <polyline points="{{ coordinates|join(' ') }}" fill="none" stroke="currentColor" stroke-width="0.8"
+                      stroke-linejoin="round" stroke-linecap="round" opacity="0.7"></polyline>
+        </svg>
+        <p class="light">{{ 'Highest: {max} rows.'|t('reportr', { max: maximum|number }) }}</p>
+    {% endif %}
+
+    {% if history|length > 1 %}
+        <h2>{{ 'Other runs of this report'|t('reportr') }}</h2>
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ 'When'|t('reportr') }}</th>
+                    <th>{{ 'Status'|t('reportr') }}</th>
+                    <th>{{ 'Rows'|t('reportr') }}</th>
+                    <th>{{ 'Duration'|t('reportr') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for previous in history %}
+                    <tr{{ previous.id == run.id ? ' class="sel"' : '' }}>
+                        <td><a href="{{ url('reportr/runs/' ~ previous.id) }}">{{ (previous.dateFinished ?? previous.dateCreated)|datetime('short') }}</a></td>
+                        <td>{{ previous.statusLabel }}</td>
+                        <td>{{ previous.totalRows|number }}</td>
+                        <td>{{ previous.formattedDuration }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}
+
+{% block details %}
+    <div class="meta read-only">
+        <div class="data">
+            <div class="heading">{{ 'Status'|t('reportr') }}</div>
+            <div class="value">{{ run.statusLabel }}</div>
+        </div>
+        <div class="data">
+            <div class="heading">{{ 'Rows'|t('reportr') }}</div>
+            <div class="value">{{ run.totalRows|number }}</div>
+        </div>
+        <div class="data">
+            <div class="heading">{{ 'Size'|t('reportr') }}</div>
+            <div class="value">{{ run.formattedSize }}</div>
+        </div>
+        <div class="data">
+            <div class="heading">{{ 'Duration'|t('reportr') }}</div>
+            <div class="value">{{ run.formattedDuration }}</div>
+        </div>
+        {% if run.peakMemory %}
+            <div class="data">
+                <div class="heading">{{ 'Peak memory'|t('reportr') }}</div>
+                <div class="value">{{ run.peakMemory|filesize }}</div>
+            </div>
+        {% endif %}
+        <div class="data">
+            <div class="heading">{{ 'Started by'|t('reportr') }}</div>
+            <div class="value">{{ run.initiatorLabels()[run.initiator] ?? run.initiator }}{% if run.user %} — {{ run.user.friendlyName }}{% endif %}</div>
+        </div>
+        <div class="data">
+            <div class="heading">{{ 'Stored'|t('reportr') }}</div>
+            <div class="value">{{ run.fsHandle ? run.fsHandle : 'Local storage'|t('reportr') }}{% if run.path %}<br><code class="small">{{ run.path }}</code>{% endif %}</div>
+        </div>
+    </div>
+
+    <div class="buttons" style="padding: 0 24px 24px;">
+        {% if canDownload and run.isDownloadable %}
+            <a href="{{ run.downloadUrl }}" class="btn submit">{{ 'Download'|t('app') }}</a>
+        {% endif %}
+        {% if report %}
+            <a href="{{ report.runUrl }}" class="btn">{{ 'Run again'|t('reportr') }}</a>
+        {% endif %}
+        {% if canDelete %}
+            <button type="button" id="reportr-delete-run" class="btn delete">{{ 'Delete'|t('app') }}</button>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% css %}
+.reportr-message { white-space: pre-wrap; word-break: break-word; background: rgba(128,128,128,.08); padding: 1rem; border-radius: 4px; font-size: 12px; }
+{% endcss %}
+
+{% js %}
+(function() {
+    var deleteButton = document.getElementById('reportr-delete-run');
+
+    if (deleteButton) {
+        deleteButton.addEventListener('click', function() {
+            if (!confirm(Craft.t('reportr', 'Delete this run and its file?'))) {
+                return;
+            }
+
+            deleteButton.classList.add('loading');
+
+            Craft.sendActionRequest('POST', 'reportr/runs/delete', {
+                data: { runId: {{ run.id }}, hardDelete: 1 }
+            }).then(function() {
+                window.location.href = Craft.getCpUrl('reportr/runs');
+            }).catch(function() {
+                deleteButton.classList.remove('loading');
+                Craft.cp.displayError(Craft.t('reportr', 'Couldn’t delete the run.'));
+            });
+        });
+    }
+
+    {% if not finished %}
+    // The page is watching a build that is still going. Polling rather than a socket, because a
+    // report finishes once and the page is open for minutes, not hours.
+    var poll = window.setInterval(function() {
+        Craft.sendActionRequest('POST', 'reportr/runs/status', {
+            data: { runId: {{ run.id }} }
+        }).then(function(response) {
+            if (response.data.finished) {
+                window.clearInterval(poll);
+                window.location.reload();
+            }
+        }).catch(function() {
+            window.clearInterval(poll);
+        });
+    }, 3000);
+    {% endif %}
+})();
+{% endjs %}

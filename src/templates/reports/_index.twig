@@ -1,0 +1,11 @@
+{% extends '_layouts/elementindex' %}
+
+{% set title = 'Reports'|t('reportr') %}
+{% set elementType = 'justinholtweb\\reportr\\elements\\Report' %}
+{% set selectedSubnavItem = 'reports' %}
+
+{% block actionButton %}
+    {% if canManage %}
+        <a href="{{ url('reportr/reports/new') }}" class="btn submit add icon">{{ 'New report'|t('reportr') }}</a>
+    {% endif %}
+{% endblock %}

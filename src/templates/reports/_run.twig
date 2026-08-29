@@ -1,0 +1,165 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set selectedSubnavItem = 'reports' %}
+{% set title = 'Run {report}'|t('reportr', { report: report.title }) %}
+{% set fullPageForm = true %}
+{% set crumbs = [
+    { label: 'Reports'|t('reportr'), url: url('reportr/reports') },
+    { label: report.title, url: report.cpEditUrl },
+] %}
+
+{% block content %}
+    <input type="hidden" name="action" value="reportr/reports/run">
+    <input type="hidden" name="reportId" value="{{ report.id }}">
+
+    {% if report.description %}
+        <p class="light">{{ report.description }}</p>
+    {% endif %}
+
+    {% for param in report.params %}
+        {% set value = values[param.name] ?? null %}
+        {% set fieldConfig = {
+            label: param.label,
+            instructions: param.instructions,
+            name: 'params[' ~ param.name ~ ']',
+            id: 'param-' ~ param.name,
+            required: param.required,
+            errors: errors[param.name] is defined ? [errors[param.name]] : [],
+        } %}
+
+        {% if param.type == 'boolean' %}
+            {{ forms.lightswitchField(fieldConfig|merge({ on: value })) }}
+
+        {% elseif param.type == 'number' %}
+            {{ forms.textField(fieldConfig|merge({ type: 'number', size: 10, value: value })) }}
+
+        {% elseif param.type == 'date' %}
+            {{ forms.dateField(fieldConfig|merge({ value: value })) }}
+
+        {% elseif param.type == 'datetime' %}
+            {{ forms.dateTimeField(fieldConfig|merge({ value: value })) }}
+
+        {% elseif param.type == 'select' %}
+            {{ forms.selectField(fieldConfig|merge({
+                options: param.options,
+                value: value,
+            })) }}
+
+        {% elseif param.type == 'multiselect' %}
+            {{ forms.checkboxGroupField(fieldConfig|merge({
+                name: 'params[' ~ param.name ~ ']',
+                options: param.options,
+                values: value ?? [],
+            })) }}
+
+        {% elseif param.type == 'site' %}
+            {{ forms.selectField(fieldConfig|merge({
+                options: craft.app.sites.allSites|map(s => { label: s.name, value: s.id }),
+                value: value,
+            })) }}
+
+        {% elseif param.isElementType %}
+            {# An element select posts `…[elementId][]` from inside each chip and an empty
+               placeholder under the plain name, so the normaliser has to tolerate both. #}
+            {{ forms.elementSelectField(fieldConfig|merge({
+                elementType: param.elementType,
+                elements: param.isMultiple ? (value ?? []) : (value ? [value] : []),
+                limit: param.isMultiple ? null : 1,
+                selectionLabel: 'Choose'|t('app'),
+            })) }}
+
+        {% else %}
+            {{ forms.textField(fieldConfig|merge({ value: value })) }}
+        {% endif %}
+    {% endfor %}
+
+    {% if report.params is empty %}
+        <p>{{ 'This report takes no parameters.'|t('reportr') }}</p>
+    {% endif %}
+
+    <div class="buttons">
+        <button type="submit" class="btn submit">{{ 'Run report'|t('reportr') }}</button>
+        <button type="button" id="reportr-preview" class="btn">{{ 'Preview'|t('reportr') }}</button>
+    </div>
+
+    <div id="reportr-preview-pane" class="hidden" style="margin-top: 1.5rem;"></div>
+{% endblock %}
+
+{% js %}
+(function() {
+    var button = document.getElementById('reportr-preview');
+    var pane = document.getElementById('reportr-preview-pane');
+
+    if (!button) {
+        return;
+    }
+
+    button.addEventListener('click', function() {
+        var form = button.closest('form');
+        var data = new FormData(form);
+        // The form's own `action` is the run action; the preview is a different one, and
+        // overwriting the value rather than adding a second is what keeps Craft from routing to
+        // whichever it happened to read last.
+        data.set('action', 'reportr/reports/preview');
+
+        button.classList.add('loading');
+        pane.classList.remove('hidden');
+        pane.innerHTML = '<p class="light">{{ 'Running…'|t('reportr')|e('js') }}</p>';
+
+        Craft.sendActionRequest('POST', 'reportr/reports/preview', { data: data })
+            .then(function(response) {
+                button.classList.remove('loading');
+                pane.innerHTML = window.reportrRenderPreview(response.data);
+            })
+            .catch(function(error) {
+                button.classList.remove('loading');
+                var message = (error.response && error.response.data && error.response.data.error) || error.message;
+                pane.innerHTML = '<p class="error"></p>';
+                pane.querySelector('p').textContent = message;
+            });
+    });
+
+    window.reportrRenderPreview = function(data) {
+        if (!data.success) {
+            var p = document.createElement('p');
+            p.className = 'error';
+            p.textContent = data.error || 'Something went wrong.';
+            return p.outerHTML;
+        }
+
+        var table = document.createElement('table');
+        table.className = 'data fullwidth';
+
+        if (data.headings && data.headings.length) {
+            var thead = table.createTHead();
+            var tr = thead.insertRow();
+            data.headings.forEach(function(heading) {
+                var th = document.createElement('th');
+                th.textContent = heading;
+                tr.appendChild(th);
+            });
+        }
+
+        var tbody = document.createElement('tbody');
+        (data.rows || []).forEach(function(row) {
+            var tr = tbody.insertRow();
+            row.forEach(function(cell) {
+                tr.insertCell().textContent = cell === null ? '' : String(cell);
+            });
+        });
+        table.appendChild(tbody);
+
+        var note = document.createElement('p');
+        note.className = 'light';
+        note.textContent = data.totalRows + ' rows' + (data.truncated ? ' (truncated)' : '') + ' in ' + data.durationMs + ' ms';
+
+        var wrapper = document.createElement('div');
+        wrapper.style.overflowX = 'auto';
+        wrapper.appendChild(table);
+        wrapper.appendChild(note);
+
+        return wrapper.outerHTML;
+    };
+})();
+{% endjs %}

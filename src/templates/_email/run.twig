@@ -1,0 +1,36 @@
+{% apply spaceless %}
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.5; color: #1f2933;">
+    <h1 style="font-size: 18px; margin: 0 0 12px;">{{ report.title }}</h1>
+
+    {% if run.isFinished %}
+        <p style="margin: 0 0 12px;">
+            {{ '{rows} rows, {size}.'|t('reportr', { rows: run.totalRows|number, size: run.formattedSize }) }}
+            {% if attached %}
+                {{ 'The file is attached.'|t('reportr') }}
+            {% else %}
+                {{ 'The file is too large to attach — download it from the link below.'|t('reportr') }}
+            {% endif %}
+        </p>
+    {% else %}
+        <p style="margin: 0 0 12px; color: #cf1124;">
+            {{ 'This run did not finish.'|t('reportr') }}
+        </p>
+        {% if run.statusMessage %}
+            <pre style="background: #f5f7fa; padding: 12px; border-radius: 4px; white-space: pre-wrap; font-size: 12px;">{{ run.statusMessage }}</pre>
+        {% endif %}
+    {% endif %}
+
+    {% if params|length %}
+        <table style="border-collapse: collapse; margin: 0 0 12px;">
+            {% for label, value in params %}
+                <tr>
+                    <th style="text-align: left; padding: 2px 12px 2px 0; font-weight: 600;">{{ label }}</th>
+                    <td style="padding: 2px 0;">{{ value }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    <p style="margin: 0;"><a href="{{ url }}" style="color: #0b69a3;">{{ 'View this run'|t('reportr') }}</a></p>
+</div>
+{% endapply %}

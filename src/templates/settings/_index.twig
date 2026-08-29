@@ -1,0 +1,199 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set selectedSubnavItem = 'settings' %}
+{% set title = 'Reportr settings'|t('reportr') %}
+{% set fullPageForm = true %}
+{% set crumbs = [{ label: 'Reportr'|t('reportr'), url: url('reportr/reports') }] %}
+
+{% block content %}
+    <input type="hidden" name="action" value="reportr/settings/save">
+    {{ redirectInput('reportr/settings') }}
+
+    <h2>{{ 'Where report files go'|t('reportr') }}</h2>
+
+    {{ forms.selectField({
+        label: 'Filesystem'|t('reportr'),
+        instructions: 'The default for every report that does not name one of its own. A platform with an ephemeral disk — Heroku, a scaled container, a read-only image — needs a real filesystem here, or every report file disappears at the next restart.'|t('reportr'),
+        name: 'settings[fsHandle]',
+        options: fsOptions,
+        value: settings.fsHandle,
+        errors: settings.getErrors('fsHandle'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Subfolder'|t('reportr'),
+        name: 'settings[fsSubpath]',
+        class: 'code',
+        value: settings.fsSubpath,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Local folder'|t('reportr'),
+        instructions: 'Used when no filesystem is chosen. Leave it blank for `storage/reportr`. Environment variables work here.'|t('reportr')|md(inlineOnly=true),
+        name: 'settings[storageFolder]',
+        class: 'code',
+        placeholder: storagePath,
+        value: settings.storageFolder,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Big reports'|t('reportr') }}</h2>
+
+    {{ forms.textField({
+        label: 'Job timeout'|t('reportr'),
+        instructions: 'Seconds a queued build may take before the queue reclaims it. Craft’s own default is 300, which is where "exceeded the timeout of 300 seconds" comes from on a report that has grown.'|t('reportr'),
+        name: 'settings[jobTtr]',
+        type: 'number',
+        size: 8,
+        value: settings.jobTtr,
+        errors: settings.getErrors('jobTtr'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Batch size'|t('reportr'),
+        instructions: 'Rows fetched at a time while walking a query. Lower it if a report runs out of memory; raise it for speed on a machine with room.'|t('reportr'),
+        name: 'settings[batchSize]',
+        type: 'number',
+        size: 8,
+        value: settings.batchSize,
+        errors: settings.getErrors('batchSize'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Memory limit'|t('reportr'),
+        instructions: 'Applied for the duration of a build and put back afterwards. Never lowers a limit the server already has.'|t('reportr'),
+        name: 'settings[memoryLimit]',
+        width: 30,
+        value: settings.memoryLimit,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Time limit'|t('reportr'),
+        instructions: 'Seconds, applied for the duration of a build. 0 leaves PHP’s own setting alone.'|t('reportr'),
+        name: 'settings[timeLimit]',
+        type: 'number',
+        size: 8,
+        value: settings.timeLimit,
+        errors: settings.getErrors('timeLimit'),
+    }) }}
+
+    {{ forms.textField({
+        label: 'Preview rows'|t('reportr'),
+        name: 'settings[previewRows]',
+        type: 'number',
+        size: 8,
+        value: settings.previewRows,
+        errors: settings.getErrors('previewRows'),
+    }) }}
+
+    <hr>
+    <h2>{{ 'Housekeeping'|t('reportr') }}</h2>
+
+    {{ forms.textField({
+        label: 'Keep the last'|t('reportr'),
+        instructions: 'runs of each report. 0 keeps everything.'|t('reportr'),
+        name: 'settings[retentionRuns]',
+        type: 'number',
+        size: 6,
+        value: settings.retentionRuns,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Keep runs for'|t('reportr'),
+        instructions: 'days. 0 keeps everything.'|t('reportr'),
+        name: 'settings[retentionDays]',
+        type: 'number',
+        size: 6,
+        value: settings.retentionDays,
+    }) }}
+
+    {{ forms.textField({
+        label: 'Largest email attachment'|t('reportr'),
+        instructions: 'Megabytes. Over this, delivery emails carry a link instead of the file.'|t('reportr'),
+        name: 'settings[maxAttachmentMb]',
+        type: 'number',
+        size: 6,
+        value: settings.maxAttachmentMb,
+    }) }}
+
+    <hr>
+    <h2>{{ 'Schedules'|t('reportr') }}</h2>
+
+    {{ forms.lightswitchField({
+        label: 'Fire schedules from control-panel traffic'|t('reportr'),
+        instructions: 'The same arrangement as Craft’s `runQueueAutomatically`, and the same caveat: a site whose control panel nobody opens for a week will not run its Monday report. A cron entry running `php craft reportr/schedule/run` every minute is the reliable way.'|t('reportr')|md(inlineOnly=true),
+        name: 'settings[runScheduleAutomatically]',
+        on: settings.runScheduleAutomatically,
+    }) }}
+
+    <div class="field">
+        <div class="input">
+            <button type="button" id="reportr-refresh-schedules" class="btn">{{ 'Recalculate every schedule'|t('reportr') }}</button>
+            <div class="light">{{ 'After a timezone change, or a database restored from another machine.'|t('reportr') }}</div>
+        </div>
+    </div>
+
+    <hr>
+    <h2>{{ 'Compatibility'|t('reportr') }}</h2>
+
+    {{ forms.lightswitchField({
+        label: 'Read Lab Reports’ formatting functions'|t('reportr'),
+        instructions: 'Reads the `functions` array from `config/labreports.php` as well as Reportr’s own, so advanced reports imported from that plugin keep working without anything being moved. Reportr’s own definitions win on a name collision.'|t('reportr')|md(inlineOnly=true),
+        name: 'settings[readLabReportsConfig]',
+        on: settings.readLabReportsConfig,
+    }) }}
+
+    {% if importAvailable %}
+        <p><a href="{{ url('reportr/import') }}">{{ 'Import from Lab Reports →'|t('reportr') }}</a></p>
+    {% endif %}
+
+    {{ forms.lightswitchField({
+        label: 'Debug logging'|t('reportr'),
+        instructions: 'Writes more to `storage/logs/reportr.log` and puts full stack traces on failed runs. Also leaves Craft’s query logging on during a build, which is otherwise switched off because it is the largest memory allocation in a long export.'|t('reportr')|md(inlineOnly=true),
+        name: 'settings[debug]',
+        on: settings.debug,
+    }) }}
+{% endblock %}
+
+{% block details %}
+    <div class="meta read-only">
+        <div class="data">
+            <div class="heading">{{ 'Formatting functions'|t('reportr') }}</div>
+            <div class="value">
+                {% if functionNames|length %}
+                    {% for name in functionNames %}<code class="small">{{ name }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}
+                {% else %}
+                    <span class="light">{{ 'None defined'|t('reportr') }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="data">
+            <div class="heading">{{ 'Formats'|t('reportr') }}</div>
+            <div class="value">
+                {% if unsupported|length %}
+                    <span class="error">{{ 'Not available here: {list}'|t('reportr', { list: unsupported|join(', ')|upper }) }}</span>
+                {% else %}
+                    {{ 'All available'|t('reportr') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% js %}
+document.getElementById('reportr-refresh-schedules').addEventListener('click', function(event) {
+    var button = event.currentTarget;
+    button.classList.add('loading');
+
+    Craft.sendActionRequest('POST', 'reportr/settings/refresh-schedules')
+        .then(function() {
+            button.classList.remove('loading');
+            Craft.cp.displayNotice(Craft.t('reportr', 'Schedules recalculated.'));
+        })
+        .catch(function() {
+            button.classList.remove('loading');
+            Craft.cp.displayError(Craft.t('reportr', 'Couldn’t recalculate the schedules.'));
+        });
+});
+{% endjs %}
