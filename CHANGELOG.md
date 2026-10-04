@@ -1,5 +1,11 @@
 # Release Notes for Reportr
 
+## 5.0.1 - 2026-10-04
+
+### Changed
+
+- Reportr is now licensed under the Craft License.
+
 ## 5.0.0 - 2026-10-03
 
 Initial release.

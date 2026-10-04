@@ -1,7 +1,7 @@
 {
     "name": "justinholtweb/craft-reportr",
     "description": "Content and data reports for Craft CMS — template or point-and-click, with run-time parameters, seven export formats, scheduling, email delivery and storage on any filesystem.",
-    "version": "5.0.0",
+    "version": "5.0.1",
     "type": "craft-plugin",
     "keywords": [
         "craftcms",
