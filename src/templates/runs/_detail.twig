@@ -1,4 +1,5 @@
 {% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
 
 {% set selectedSubnavItem = 'runs' %}
 {% set title = run.uiLabel %}
@@ -13,6 +14,23 @@
 {% set params = run.describeParams() %}
 {% set finished = run.runStatus in ['finished', 'error'] %}
 
+{% if report %}
+    {% set additionalButtons %}
+        <a href="{{ report.runUrl }}" class="btn">{{ 'Run again'|t('reportr') }}</a>
+    {% endset %}
+{% endif %}
+
+{% do view.registerTranslations('reportr', [
+    'Delete this run and its file?',
+    'Couldn’t delete the run.',
+]) %}
+
+{% block actionButton %}
+    {% if canDownload and run.isDownloadable %}
+        <a href="{{ run.downloadUrl }}" class="btn submit">{{ 'Download'|t('app') }}</a>
+    {% endif %}
+{% endblock %}
+
 {% block content %}
     <div id="reportr-status">
         {% include 'reportr/runs/_status' with { run: run } only %}
@@ -24,7 +42,7 @@
             <tbody>
                 {% for label, value in params %}
                     <tr>
-                        <th style="width: 30%;">{{ label }}</th>
+                        <th scope="row" class="thin">{{ label }}</th>
                         <td>{{ value }}</td>
                     </tr>
                 {% endfor %}
@@ -78,7 +96,7 @@
                 {% for previous in history %}
                     <tr{{ previous.id == run.id ? ' class="sel"' : '' }}>
                         <td><a href="{{ url('reportr/runs/' ~ previous.id) }}">{{ (previous.dateFinished ?? previous.dateCreated)|datetime('short') }}</a></td>
-                        <td>{{ previous.statusLabel }}</td>
+                        <td>{% include 'reportr/runs/_status-dot' with { status: previous.runStatus } only %}{{ previous.statusLabel }}</td>
                         <td>{{ previous.totalRows|number }}</td>
                         <td>{{ previous.formattedDuration }}</td>
                     </tr>
@@ -89,54 +107,49 @@
 {% endblock %}
 
 {% block details %}
-    <div class="meta read-only">
+    <dl class="meta read-only">
         <div class="data">
-            <div class="heading">{{ 'Status'|t('reportr') }}</div>
-            <div class="value">{{ run.statusLabel }}</div>
+            <dt class="heading">{{ 'Status'|t('reportr') }}</dt>
+            <dd class="value">{{ run.statusLabel }}</dd>
         </div>
         <div class="data">
-            <div class="heading">{{ 'Rows'|t('reportr') }}</div>
-            <div class="value">{{ run.totalRows|number }}</div>
+            <dt class="heading">{{ 'Rows'|t('reportr') }}</dt>
+            <dd class="value">{{ run.totalRows|number }}</dd>
         </div>
         <div class="data">
-            <div class="heading">{{ 'Size'|t('reportr') }}</div>
-            <div class="value">{{ run.formattedSize }}</div>
+            <dt class="heading">{{ 'Size'|t('reportr') }}</dt>
+            <dd class="value">{{ run.formattedSize }}</dd>
         </div>
         <div class="data">
-            <div class="heading">{{ 'Duration'|t('reportr') }}</div>
-            <div class="value">{{ run.formattedDuration }}</div>
+            <dt class="heading">{{ 'Duration'|t('reportr') }}</dt>
+            <dd class="value">{{ run.formattedDuration }}</dd>
         </div>
         {% if run.peakMemory %}
             <div class="data">
-                <div class="heading">{{ 'Peak memory'|t('reportr') }}</div>
-                <div class="value">{{ run.peakMemory|filesize }}</div>
+                <dt class="heading">{{ 'Peak memory'|t('reportr') }}</dt>
+                <dd class="value">{{ run.peakMemory|filesize }}</dd>
             </div>
         {% endif %}
         <div class="data">
-            <div class="heading">{{ 'Started by'|t('reportr') }}</div>
-            <div class="value">{{ run.initiatorLabels()[run.initiator] ?? run.initiator }}{% if run.user %} — {{ run.user.friendlyName }}{% endif %}</div>
+            <dt class="heading">{{ 'Started by'|t('reportr') }}</dt>
+            <dd class="value">{{ run.initiatorLabels()[run.initiator] ?? run.initiator }}{% if run.user %} — {{ run.user.friendlyName }}{% endif %}</dd>
         </div>
         <div class="data">
-            <div class="heading">{{ 'Stored'|t('reportr') }}</div>
-            <div class="value">{{ run.fsHandle ? run.fsHandle : 'Local storage'|t('reportr') }}{% if run.path %}<br><code class="small">{{ run.path }}</code>{% endif %}</div>
+            <dt class="heading">{{ 'Stored'|t('reportr') }}</dt>
+            <dd class="value">{{ run.fsHandle ? run.fsHandle : 'Local storage'|t('reportr') }}{% if run.path %}<br><code class="small">{{ run.path }}</code>{% endif %}</dd>
         </div>
-    </div>
+    </dl>
 
-    <div class="buttons" style="padding: 0 24px 24px;">
-        {% if canDownload and run.isDownloadable %}
-            <a href="{{ run.downloadUrl }}" class="btn submit">{{ 'Download'|t('app') }}</a>
-        {% endif %}
-        {% if report %}
-            <a href="{{ report.runUrl }}" class="btn">{{ 'Run again'|t('reportr') }}</a>
-        {% endif %}
-        {% if canDelete %}
-            <button type="button" id="reportr-delete-run" class="btn delete">{{ 'Delete'|t('app') }}</button>
-        {% endif %}
-    </div>
+    {% if canDelete %}
+        {# Posted from JavaScript: this screen has no page form for an action menu to post. #}
+        <div class="meta">
+            {{ forms.button({ id: 'reportr-delete-run', class: 'caution', label: 'Delete'|t('app'), spinner: true }) }}
+        </div>
+    {% endif %}
 {% endblock %}
 
 {% css %}
-.reportr-message { white-space: pre-wrap; word-break: break-word; background: rgba(128,128,128,.08); padding: 1rem; border-radius: 4px; font-size: 12px; }
+.reportr-message { white-space: pre-wrap; word-break: break-word; background: var(--gray-050); padding: var(--m); border-radius: var(--radius-md); }
 {% endcss %}
 
 {% js %}
@@ -145,6 +158,10 @@
 
     if (deleteButton) {
         deleteButton.addEventListener('click', function() {
+            if (deleteButton.classList.contains('loading')) {
+                return;
+            }
+
             if (!confirm(Craft.t('reportr', 'Delete this run and its file?'))) {
                 return;
             }

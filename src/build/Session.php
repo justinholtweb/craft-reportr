@@ -7,7 +7,6 @@ namespace justinholtweb\reportr\build;
 use Craft;
 use craft\base\ElementInterface;
 use craft\db\Query;
-use craft\elements\db\ElementQuery;
 use justinholtweb\reportr\elements\Report;
 use justinholtweb\reportr\elements\Run;
 use justinholtweb\reportr\Plugin;

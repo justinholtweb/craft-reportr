@@ -31,6 +31,57 @@ use Throwable;
  */
 class QueryBuilder extends Component
 {
+    /** What an order-by may be: a column, optionally table-qualified. */
+    public const ORDER_BY_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/';
+
+    /**
+     * Path segments no column may read. Lower case.
+     *
+     * Credentials, plus the getters that do work rather than read a value: `copyOfFile` writes a
+     * temporary file per row, `stream`/`contents`/`dataUrl` read a whole asset into memory.
+     */
+    public const DENIED_SEGMENTS = [
+        'password', 'newpassword', 'currentpassword', 'verificationcode', 'authkey', 'securitykey',
+        'copyoffile', 'stream', 'contents', 'dataurl', 'fs', 'transformfs',
+    ];
+
+    /**
+     * Element-query params a report parameter of the same name is applied to — and the only ones.
+     *
+     * Before this, any parameter named after a query *property* was assigned to it, which made
+     * `where` and `orderBy` raw SQL, and `editable` or `sectionId` a way past the report's source.
+     * These are filters a person running a report would reasonably narrow by; nothing here is SQL,
+     * and the ones a source also sets are intersected with it ({@see ID_PARAMS}).
+     */
+    public const QUERY_PARAMS = [
+        'postDate', 'expiryDate', 'dateCreated', 'dateUpdated', 'lastLoginDate',
+        'relatedTo', 'search', 'level', 'kind',
+        'sectionId', 'typeId', 'authorId', 'authorGroupId', 'groupId', 'volumeId', 'folderId',
+    ];
+
+    /**
+     * Query params that an index source may itself set to define what it shows. A parameter can
+     * only narrow these: its answer is intersected with the source's, never put in its place.
+     */
+    public const ID_PARAMS = ['sectionId', 'typeId', 'authorId', 'authorGroupId', 'groupId', 'volumeId', 'folderId'];
+
+    /**
+     * Objects that are not elements but that a column may still read scalars from, one step past
+     * an element: `section.handle`, `type.name`, `volume.handle`, `site.language`. Nothing else
+     * that an element getter returns is walked — `fs.secret` is why.
+     */
+    private const READABLE_MODELS = [
+        \craft\models\Section::class,
+        \craft\models\EntryType::class,
+        \craft\models\Volume::class,
+        \craft\models\VolumeFolder::class,
+        \craft\models\Site::class,
+        \craft\models\SiteGroup::class,
+        \craft\models\CategoryGroup::class,
+        \craft\models\TagGroup::class,
+        \craft\models\UserGroup::class,
+    ];
+
     /**
      * Attributes offered for every element type, on top of whatever the type itself lists.
      *
@@ -117,8 +168,10 @@ class QueryBuilder extends Component
             $query->siteId($spec->site === '*' ? '*' : $spec->site);
         }
 
-        if ($spec->orderBy !== null && trim($spec->orderBy) !== '') {
-            $query->orderBy(trim($spec->orderBy) . ' ' . $spec->direction);
+        // A column name, never an expression: Yii passes anything with a parenthesis through to
+        // the SQL unquoted, and the order is a field a report author types.
+        if ($spec->orderBy !== null && preg_match(self::ORDER_BY_PATTERN, trim($spec->orderBy))) {
+            $query->orderBy([trim($spec->orderBy) => $spec->direction === 'desc' ? SORT_DESC : SORT_ASC]);
         }
 
         if ($spec->limit !== null) {
@@ -133,30 +186,97 @@ class QueryBuilder extends Component
     /**
      * Let parameters filter the query without anybody writing a query.
      *
-     * A parameter whose name matches a query param on the element query is applied to it — so a
-     * report with a `sectionId` or `postDate` parameter is filterable at run time with no
-     * configuration at all. Names that are not query params are ignored here and are still
-     * available to a `twig:` column, which is the escape hatch.
+     * A parameter named after one of {@see QUERY_PARAMS} is applied to the query through its own
+     * method — so a report with a `postDate` or `authorId` parameter is filterable at run time with
+     * no configuration. Any other name is still available to a `twig:` column and to templates;
+     * it just never touches the query.
+     *
+     * An answer can only narrow what the report's source shows. Where the source already set one of
+     * {@see ID_PARAMS}, the answer is intersected with it, and an answer outside it matches nothing.
      */
     private function applyParams(ElementQuery $query, array $params): void
     {
         foreach ($params as $name => $value) {
-            if ($value === null || $value === [] || $value === '') {
+            $name = (string)$name;
+            // Called through a plain string: the methods live on the element type's own query
+            // class, which is only known at run time.
+            $method = $name;
+
+            if ($value === null || $value === [] || $value === '' || !in_array($name, self::QUERY_PARAMS, true)) {
                 continue;
             }
 
-            // `id`, `siteId` and friends are real query params and also the ones most likely to
-            // be a parameter name by coincidence, so this is opt-in by naming and nothing else.
-            if (!property_exists($query, (string)$name)) {
+            if ($name !== 'relatedTo' && !method_exists($query, $name)) {
                 continue;
             }
 
             try {
-                $query->{$name} = $value;
+                if ($name === 'relatedTo') {
+                    // `andRelatedTo`: a source can relate too, and this must add to it, not replace it.
+                    $query->andRelatedTo($value);
+
+                    continue;
+                }
+
+                if (in_array($name, self::ID_PARAMS, true)) {
+                    $ids = $this->ids($value);
+
+                    if ($ids === null || $ids === []) {
+                        continue;
+                    }
+
+                    $existing = property_exists($query, $name) ? $query->{$name} : null;
+
+                    if ($existing !== null && $existing !== '' && $existing !== []) {
+                        $allowed = $this->ids($existing);
+
+                        if ($allowed === null) {
+                            // The source set it to something other than a list of IDs — `not 3`,
+                            // a wildcard. Not something to intersect with safely, so the source wins.
+                            Craft::warning("Reportr ignored the “{$name}” parameter: the report’s source already sets it.", 'reportr');
+
+                            continue;
+                        }
+
+                        $ids = array_values(array_intersect($ids, $allowed)) ?: [0];
+                    }
+
+                    $query->$method($ids);
+
+                    continue;
+                }
+
+                $query->$method($value);
             } catch (Throwable $e) {
                 Craft::warning("Reportr could not apply the “{$name}” parameter to the query: " . $e->getMessage(), 'reportr');
             }
         }
+    }
+
+    /**
+     * A parameter answer or a criteria value as a list of integer IDs, or null if it isn't one.
+     *
+     * @return int[]|null
+     */
+    private function ids(mixed $value): ?array
+    {
+        $ids = [];
+
+        foreach (is_array($value) ? $value : [$value] as $item) {
+            if ($item instanceof ElementInterface) {
+                $item = $item->id;
+            }
+
+            if (is_int($item) || (is_string($item) && ctype_digit($item))) {
+                $ids[] = (int)$item;
+
+                continue;
+            }
+
+            return null;
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function applySource(ElementQuery $query, QuerySpec $spec): void
@@ -165,7 +285,12 @@ class QueryBuilder extends Component
             return;
         }
 
-        $source = ElementHelper::findSource($spec->elementType, $spec->source, ElementSources::CONTEXT_INDEX);
+        // Not the index context: Craft builds that around whoever is signed in and adds
+        // `editable: true`, so a build from cron or a console queue runner — nobody signed in —
+        // aborted with no rows, and one from a web queue ran with the reach of whichever visitor
+        // happened to trigger it. Who may report on a source is settled when the report is saved
+        // (`Report::validateAccess()`); the build runs what was saved.
+        $source = ElementHelper::findSource($spec->elementType, $spec->source, ElementSources::CONTEXT_FIELD);
 
         if ($source === null) {
             // The section was deleted, or the source was renamed. Running the report against
@@ -175,7 +300,9 @@ class QueryBuilder extends Component
         }
 
         if (!empty($source['criteria'])) {
-            Craft::configure($query, $source['criteria']);
+            $criteria = $source['criteria'];
+            unset($criteria['editable'], $criteria['savable']);
+            Craft::configure($query, $criteria);
         }
 
         if (!empty($source['condition'])) {
@@ -276,8 +403,23 @@ class QueryBuilder extends Component
         return $value;
     }
 
+    /**
+     * One segment of a column path.
+     *
+     * What may be walked into is deliberately narrow, because a path is typed by whoever manages
+     * reports and every getter on every object it reaches is otherwise theirs to call: elements,
+     * element queries, lists and plain arrays, field values, and — one step past an element — the
+     * handful of {@see READABLE_MODELS}. From anything that isn't an element, only scalars, dates
+     * and elements come back. `attr:volume.fs.secret` is the path this exists to stop.
+     */
     private function step(mixed $value, string $segment): mixed
     {
+        // A user's password hash, verification code and the like are never report data, however
+        // the path reaches them (`attr:author.password`).
+        if (in_array(strtolower($segment), self::DENIED_SEGMENTS, true)) {
+            return null;
+        }
+
         if ($value instanceof ElementQuery) {
             $value = $value->all();
         }
@@ -287,6 +429,11 @@ class QueryBuilder extends Component
         }
 
         if (is_array($value)) {
+            // A keyed row — a Table field's, say — is read by key.
+            if (!array_is_list($value)) {
+                return array_key_exists($segment, $value) ? $this->admit($value[$segment], false) : null;
+            }
+
             // A numeric segment indexes into the list; anything else is read from every item.
             if (ctype_digit($segment)) {
                 return $value[(int)$segment] ?? null;
@@ -307,31 +454,80 @@ class QueryBuilder extends Component
 
         if ($value instanceof ElementInterface) {
             // `getFieldValue()` first: a field and an attribute can share a handle, and on an
-            // entry the field is what the author means by that word.
+            // entry the field is what the author means by that word. A field's value is content,
+            // whatever shape the field type gives it.
             try {
                 return $value->getFieldValue($segment);
             } catch (Throwable) {
                 // Not a field. Fall through to the attribute.
             }
+
+            return $this->admit($this->read($value, $segment), true);
         }
 
         if (is_object($value)) {
-            $getter = 'get' . ucfirst($segment);
+            return $this->admit($this->read($value, $segment), false);
+        }
 
-            if (method_exists($value, $getter)) {
-                return $value->$getter();
+        return null;
+    }
+
+    private function read(object $value, string $segment): mixed
+    {
+        $getter = 'get' . ucfirst($segment);
+
+        if (method_exists($value, $getter)) {
+            return $value->$getter();
+        }
+
+        if (isset($value->$segment) || property_exists($value, $segment)) {
+            return $value->$segment;
+        }
+
+        // Yii magic properties are neither, and `isset()` on one whose getter returns null is
+        // false — so a last attempt, guarded, rather than declaring the path dead.
+        try {
+            return $value->$segment;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * What a step may hand on: scalars, dates, elements, element queries, lists of those — and,
+     * straight off an element, one of {@see READABLE_MODELS}. Everything else stops the path.
+     */
+    private function admit(mixed $value, bool $fromElement): mixed
+    {
+        if ($value === null || is_scalar($value) || $value instanceof DateTimeInterface
+            || $value instanceof ElementInterface || $value instanceof ElementQuery) {
+            return $value;
+        }
+
+        if ($value instanceof \Illuminate\Support\Collection) {
+            $value = $value->all();
+        }
+
+        if (is_array($value)) {
+            $admitted = [];
+
+            // A list straight off an element — a user's groups — is as readable as one of them.
+            foreach ($value as $key => $item) {
+                $item = $this->admit($item, $fromElement);
+
+                if ($item !== null) {
+                    $admitted[$key] = $item;
+                }
             }
 
-            if (isset($value->$segment) || property_exists($value, $segment)) {
-                return $value->$segment;
-            }
+            return array_is_list($value) ? array_values($admitted) : $admitted;
+        }
 
-            // Yii magic properties are neither, and `isset()` on one whose getter returns null is
-            // false — so a last attempt, guarded, rather than declaring the path dead.
-            try {
-                return $value->$segment;
-            } catch (Throwable) {
-                return null;
+        if ($fromElement && is_object($value)) {
+            foreach (self::READABLE_MODELS as $class) {
+                if ($value instanceof $class) {
+                    return $value;
+                }
             }
         }
 

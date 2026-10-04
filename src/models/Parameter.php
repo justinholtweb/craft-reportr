@@ -12,6 +12,7 @@ use craft\elements\Entry;
 use craft\elements\Tag;
 use craft\elements\User;
 use craft\helpers\DateTimeHelper;
+use craft\helpers\Html;
 use craft\helpers\Localization;
 use craft\helpers\StringHelper;
 use DateTime;
@@ -56,6 +57,21 @@ class Parameter extends Model
         self::TYPE_CATEGORIES => Category::class,
         self::TYPE_ASSETS => Asset::class,
         self::TYPE_TAGS => Tag::class,
+    ];
+
+    /**
+     * Names a parameter may not take: the element-query properties that are SQL, or that decide
+     * what the query is allowed to see. Only {@see \justinholtweb\reportr\services\QueryBuilder::QUERY_PARAMS}
+     * are ever applied to a query, so these could not do harm anyway — but a parameter called
+     * `where` that silently does nothing is a report author being misled. Lower case.
+     */
+    public const RESERVED_NAMES = [
+        'where', 'andwhere', 'orwhere', 'filterwhere', 'select', 'addselect', 'from', 'join',
+        'innerjoin', 'leftjoin', 'rightjoin', 'orderby', 'addorderby', 'groupby', 'having', 'union',
+        'params', 'indexby', 'subquery', 'query', 'editable', 'savable', 'drafts', 'draftid',
+        'draftof', 'draftcreator', 'provisionaldrafts', 'revisions', 'revisionid', 'revisionof',
+        'revisioncreator', 'trashed', 'unique', 'prefersites', 'withcustomfields', 'with',
+        'eagerly', 'asarray', 'ignoreplaceholders', 'inreverse', 'fixedorder',
     ];
 
     public string $name = '';
@@ -141,6 +157,34 @@ class Parameter extends Model
         }
 
         return $name;
+    }
+
+    public static function isReservedName(string $name): bool
+    {
+        return in_array(strtolower($name), array_map('strtolower', self::RESERVED_NAMES), true);
+    }
+
+    /**
+     * The label as HTML-safe text. Craft's field macros put `label` into the page unescaped, and a
+     * label is written by anyone who can manage reports and read by whoever runs the report.
+     */
+    public function getSafeLabel(): string
+    {
+        return Html::encode($this->label);
+    }
+
+    /**
+     * The instructions as plain text for the field macros' `instructions`, which Craft renders as
+     * markdown that allows raw HTML and `javascript:` links. Encoded, and with markdown's own
+     * punctuation escaped, so what the author typed is what is shown and nothing more.
+     */
+    public function getSafeInstructions(): ?string
+    {
+        if ($this->instructions === null || trim($this->instructions) === '') {
+            return null;
+        }
+
+        return preg_replace('/([\\\\`*_{}\[\]()#+\-.!|<>~])/', '\\\\$1', Html::encode($this->instructions));
     }
 
     /** @return array<string, string> */
@@ -424,6 +468,7 @@ class Parameter extends Model
             ->limit($this->getIsMultiple() ? null : 1);
 
         if ($elementType === Asset::class) {
+            /** @var \craft\elements\db\AssetQuery $query */
             $query->kind(null);
         }
 
@@ -467,7 +512,7 @@ class Parameter extends Model
         }
 
         if ($this->type === self::TYPE_SITE) {
-            return Craft::$app->getSites()->getSiteById((int)$normalized)?->name ?? (string)$normalized;
+            return Craft::$app->getSites()->getSiteById((int)$normalized)->name ?? (string)$normalized;
         }
 
         return (string)$normalized;

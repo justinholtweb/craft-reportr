@@ -407,6 +407,49 @@ check('failure-only delivery sends on failure and not on success', function() {
     return $delivery->shouldSendFor(false) === true && $delivery->shouldSendFor(true) === false;
 });
 
+check('an environment variable is stored as written and resolved only when sending', function() {
+    putenv('REPORTR_TEST_RECIPIENTS=ops@example.com, finance@example.com');
+    $_SERVER['REPORTR_TEST_RECIPIENTS'] = 'ops@example.com, finance@example.com';
+
+    try {
+        $delivery = Delivery::fromArray(['when' => 'always', 'recipients' => "\$REPORTR_TEST_RECIPIENTS\nc@example.com"]);
+
+        return $delivery->recipients === ['$REPORTR_TEST_RECIPIENTS', 'c@example.com']
+            && $delivery->getResolvedRecipients() === ['ops@example.com', 'finance@example.com', 'c@example.com']
+            ? true
+            : Json::encode([$delivery->recipients, $delivery->getResolvedRecipients()]);
+    } finally {
+        putenv('REPORTR_TEST_RECIPIENTS');
+        unset($_SERVER['REPORTR_TEST_RECIPIENTS']);
+    }
+});
+
+section('Paths and columns');
+
+check('a stored path that steps out with .. resolves to nothing', function() use ($plugin) {
+    $run = new Run(['path' => '../../config/db.php']);
+
+    return $plugin->storage->localPath($run) === null && $plugin->storage->exists($run) === false;
+});
+
+check('a keyed row — a Table field’s — is read by column, across every row', function() use ($plugin) {
+    $walk = new ReflectionMethod($plugin->queries, 'walk');
+    $rows = [['amount' => 5, 'name' => 'a'], ['amount' => 7, 'name' => 'b']];
+
+    return $walk->invoke($plugin->queries, $rows, 'amount') === [5, 7] ? true : Json::encode($walk->invoke($plugin->queries, $rows, 'amount'));
+});
+
+check('a reserved parameter name is refused, any other kept', function() {
+    return Parameter::isReservedName('orderBy') && Parameter::isReservedName('where') && !Parameter::isReservedName('since');
+});
+
+check('instructions are shown as text, not markdown or HTML', function() {
+    $param = Parameter::fromArray(['name' => 'x', 'instructions' => '<b>hi</b> [a](javascript:1)']);
+    $html = \craft\helpers\Cp::parseMarkdown((string)$param->getSafeInstructions());
+
+    return !str_contains($html, '<b>') && !str_contains($html, 'href=') && str_contains($html, 'javascript:1') ? true : $html;
+});
+
 section('Format options');
 
 check('a named delimiter becomes the character', function() {
@@ -1159,6 +1202,73 @@ check('a source that no longer exists fails loudly rather than reporting everyth
     }
 
     return 'no exception was thrown';
+});
+
+check('a section source builds with nobody signed in, as on a schedule', function() use ($plugin, $makeReport, $track) {
+    if (Craft::$app->getUser()->getIdentity() !== null) {
+        return 'this check needs to run with no signed-in user';
+    }
+
+    // The section with the most entries, so the comparison means something.
+    $section = null;
+    $expected = 0;
+
+    foreach (Craft::$app->getEntries()->getAllSections() as $candidate) {
+        $count = (int)Entry::find()->sectionId($candidate->id)->status(null)->count();
+
+        if ($count > $expected) {
+            [$section, $expected] = [$candidate, $count];
+        }
+    }
+
+    if ($section === null) {
+        return 'no entries on this site to test with';
+    }
+
+    $report = $makeReport(['handle' => 'check-unattended', 'title' => 'Check unattended', 'type' => Report::TYPE_QUERY, 'template' => null]);
+    $report->setQuerySpec(QuerySpec::fromArray([
+        'elementType' => Entry::class,
+        'source' => 'section:' . $section->uid,
+        'status' => '',
+        'columns' => [['key' => 'attr:id', 'heading' => 'ID']],
+    ]));
+    Craft::$app->getElements()->saveElement($report);
+
+    $run = $track($plugin->runner->run($report, [], Run::INITIATOR_SCHEDULE));
+
+    if (!$run->getIsFinished()) {
+        return 'run failed: ' . $run->statusMessage;
+    }
+
+    return $run->totalRows > 0 ? true : "0 rows, expected up to {$expected}";
+});
+
+check('a duplicated report gets its own handle and starts disabled, unscheduled and unimported', function() use ($makeReport, $track) {
+    $report = $makeReport(['handle' => 'check-duplicate', 'title' => 'Check duplicate', 'legacyId' => 987654]);
+    $copy = $track(Craft::$app->getElements()->duplicateElement($report));
+
+    $problems = array_filter([
+        $copy->handle === $report->handle ? 'same handle' : null,
+        $copy->enabled ? 'enabled' : null,
+        $copy->legacyId !== null ? 'kept legacyId' : null,
+        $copy->runCount !== 0 ? 'kept runCount' : null,
+    ]);
+
+    return $problems === [] ? true : implode(', ', $problems);
+});
+
+check('a required parameter nobody answered fails the run with the reason', function() use ($plugin, $makeReport, $track) {
+    $report = $makeReport([
+        'handle' => 'check-required',
+        'title' => 'Check required',
+        'params' => [['name' => 'since', 'label' => 'Since', 'type' => 'date', 'required' => true]],
+    ]);
+
+    $run = $track($plugin->runner->run($report, [], Run::INITIATOR_SCHEDULE));
+
+    return !$run->getIsFinished() && $run->statusMessage !== null && $run->statusMessage !== ''
+        ? true
+        : 'status=' . $run->runStatus . ' message=' . var_export($run->statusMessage, true);
 });
 
 section('Storage');

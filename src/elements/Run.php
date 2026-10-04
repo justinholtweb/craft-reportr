@@ -8,7 +8,6 @@ use Craft;
 use craft\base\Element;
 use craft\db\Query;
 use craft\elements\db\EagerLoadPlan;
-use craft\elements\db\ElementQueryInterface;
 use craft\elements\User;
 use craft\enums\Color;
 use craft\helpers\ArrayHelper;
@@ -133,7 +132,7 @@ class Run extends Element
         return false;
     }
 
-    public static function find(): ElementQueryInterface
+    public static function find(): RunQuery
     {
         return new RunQuery(static::class);
     }
@@ -160,7 +159,7 @@ class Run extends Element
 
     public function getUiLabel(): string
     {
-        $title = $this->reportTitle ?: ($this->getReport()?->title ?? Craft::t('reportr', 'Deleted report'));
+        $title = $this->reportTitle ?: ($this->getReport()->title ?? Craft::t('reportr', 'Deleted report'));
         $date = $this->dateFinished ?? $this->dateStarted ?? $this->dateCreated;
 
         return $date !== null
@@ -213,7 +212,7 @@ class Run extends Element
         $this->_report = $report;
         $this->reportId = $report?->id;
         $this->reportTitle = $report?->title;
-        $this->format = $report?->format ?? $this->format;
+        $this->format = $report->format ?? $this->format;
 
         return $this;
     }
@@ -274,7 +273,7 @@ class Run extends Element
         foreach ($this->_params as $name => $value) {
             $param = $report?->getParam((string)$name);
 
-            $described[$param?->label ?? (string)$name] = $param !== null
+            $described[$param->label ?? (string)$name] = $param !== null
                 ? $param->describe($param->normalize($value))
                 : (is_array($value) ? implode(', ', array_map('strval', $value)) : (string)$value);
         }
@@ -613,7 +612,7 @@ class Run extends Element
             'duration' => Html::encode($this->getFormattedDuration()),
             'params' => $this->paramsHtml(),
             'initiator' => Html::encode(self::initiatorLabels()[$this->initiator] ?? $this->initiator),
-            'user' => Html::encode((string)($this->getUser()?->friendlyName ?? '—')),
+            'user' => Html::encode((string)($this->getUser()->friendlyName ?? '—')),
             'download' => $this->downloadHtml(),
             default => parent::attributeHtml($attribute),
         };
@@ -695,9 +694,10 @@ class Run extends Element
         return $user->can(Plugin::PERMISSION_VIEW_RUNS);
     }
 
+    /** Runs are written by the runner, never by a person — not even the title. */
     public function canSave(User $user): bool
     {
-        return $user->can(Plugin::PERMISSION_VIEW_RUNS);
+        return false;
     }
 
     public function canDelete(User $user): bool

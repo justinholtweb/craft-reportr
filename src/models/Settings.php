@@ -113,12 +113,6 @@ class Settings extends Model
      */
     public function setAttributes($values, $safeOnly = true): void
     {
-        if (!is_array($values)) {
-            parent::setAttributes($values, $safeOnly);
-
-            return;
-        }
-
         foreach ($values as $name => $value) {
             if (!property_exists($this, $name)) {
                 continue;

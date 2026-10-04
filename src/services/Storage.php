@@ -90,9 +90,16 @@ class Storage extends Component
 
     public function subpathFor(?Report $report): string
     {
-        $subpath = $report?->fsSubpath ?? Plugin::getInstance()->getSettings()->fsSubpath;
+        $subpath = $report->fsSubpath ?? Plugin::getInstance()->getSettings()->fsSubpath;
 
-        return trim(str_replace('\\', '/', (string)$subpath), '/');
+        // `..` segments dropped, so a report can't write outside its filesystem's folder — the
+        // local fallback is the storage folder, and the web root is two levels up.
+        $segments = array_filter(
+            explode('/', str_replace('\\', '/', (string)$subpath)),
+            static fn(string $segment) => $segment !== '' && $segment !== '.' && $segment !== '..',
+        );
+
+        return implode('/', $segments);
     }
 
     /**
@@ -170,7 +177,7 @@ class Storage extends Component
             $fs = Craft::$app->getFs()->getFilesystemByHandle($run->fsHandle);
 
             try {
-                return $fs !== null && $fs->fileExists($this->pathOf($run));
+                return $fs !== null && $this->pathOf($run) !== '' && $fs->fileExists($this->pathOf($run));
             } catch (Throwable) {
                 return false;
             }
@@ -213,7 +220,7 @@ class Storage extends Component
         if ($run->fsHandle) {
             $fs = Craft::$app->getFs()->getFilesystemByHandle($run->fsHandle);
 
-            if ($fs === null) {
+            if ($fs === null || $this->pathOf($run) === '') {
                 return null;
             }
 
@@ -242,7 +249,7 @@ class Storage extends Component
         if ($run->fsHandle) {
             $fs = Craft::$app->getFs()->getFilesystemByHandle($run->fsHandle);
 
-            if ($fs === null) {
+            if ($fs === null || $this->pathOf($run) === '') {
                 return false;
             }
 
@@ -304,10 +311,22 @@ class Storage extends Component
         return $path;
     }
 
-    /** The stored path, falling back to the bare filename for runs imported from Lab Reports. */
+    /**
+     * The stored path, falling back to the bare filename for runs imported from Lab Reports.
+     *
+     * Empty for a path that steps out with `..` or carries a null byte. Paths are only ever written
+     * by {@see store()}, but an imported row came from another plugin's table, and garbage
+     * collection deletes whatever this returns.
+     */
     private function pathOf(Run $run): string
     {
-        return trim((string)($run->path ?: $run->filename), '/');
+        $path = trim(str_replace('\\', '/', (string)($run->path ?: $run->filename)), '/');
+
+        if (str_contains($path, "\0") || preg_match('#(^|/)\.\.(/|$)#', $path)) {
+            return '';
+        }
+
+        return $path;
     }
 
     /**

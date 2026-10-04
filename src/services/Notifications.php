@@ -60,7 +60,7 @@ class Notifications extends Component
 
             // One message per recipient, not one message with everyone in the To field. An
             // export of customer data should not also disclose who else receives it.
-            foreach ($delivery->recipients as $recipient) {
+            foreach ($delivery->getResolvedRecipients() as $recipient) {
                 $sent = $message->setTo($recipient)->send() || $sent;
             }
         } catch (Throwable $e) {

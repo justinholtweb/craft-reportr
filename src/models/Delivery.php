@@ -68,8 +68,11 @@ class Delivery extends Model
     /**
      * Accepts a textarea, a comma-separated string or a list.
      *
-     * Addresses are run through Craft's env parser, so `$REPORT_RECIPIENTS` in the field is a
-     * secret that never enters project config or a database backup.
+     * An entry is kept as written: an address, or an environment variable or alias such as
+     * `$REPORT_RECIPIENTS`. The variable is resolved when the message is sent (see
+     * {@see getResolvedRecipients()}), never here — resolving it on save would write the secret
+     * into the database, and show any env var that looks like an address to whoever edits the
+     * report.
      *
      * @return string[]
      */
@@ -83,17 +86,42 @@ class Delivery extends Model
             return [];
         }
 
-        $addresses = [];
+        $entries = [];
 
         foreach ($value as $item) {
-            $parsed = (string)App::parseEnv(trim((string)$item));
+            $entry = trim((string)$item);
+
+            // Keyed case-insensitively so one address written two ways is one recipient, but the
+            // first spelling is what is kept — the local part of an address is technically
+            // case-sensitive and lower-casing it is not ours to do.
+            $key = StringHelper::toLowerCase($entry);
+
+            if ($entry === '' || isset($entries[$key])) {
+                continue;
+            }
+
+            if (self::isReference($entry) || filter_var($entry, FILTER_VALIDATE_EMAIL)) {
+                $entries[$key] = $entry;
+            }
+        }
+
+        return array_values($entries);
+    }
+
+    /**
+     * The addresses to send to, with environment variables and aliases resolved.
+     *
+     * @return string[]
+     */
+    public function getResolvedRecipients(): array
+    {
+        $addresses = [];
+
+        foreach ($this->recipients as $entry) {
+            $parsed = self::isReference($entry) ? (string)App::parseEnv($entry) : $entry;
 
             foreach (preg_split('/[\s,;]+/', $parsed) ?: [] as $address) {
                 $address = trim($address);
-
-                // Keyed case-insensitively so one address written two ways is one recipient,
-                // but the first spelling is what is kept — the local part of an address is
-                // technically case-sensitive and lower-casing it is not ours to do.
                 $key = StringHelper::toLowerCase($address);
 
                 if ($address !== '' && !isset($addresses[$key]) && filter_var($address, FILTER_VALIDATE_EMAIL)) {
@@ -103,6 +131,12 @@ class Delivery extends Model
         }
 
         return array_values($addresses);
+    }
+
+    /** `$VARIABLE` or `@alias`: resolved at send time. */
+    private static function isReference(string $entry): bool
+    {
+        return (bool)preg_match('/^[$@][A-Za-z_][A-Za-z0-9_]*$/', $entry);
     }
 
     public function toArray(array $fields = [], array $expand = [], $recursive = true): array

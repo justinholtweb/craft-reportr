@@ -1,3 +1,10 @@
+---
+title: Migrating from Lab Reports
+slug: migrating-from-lab-reports
+order: 15
+summary: Install alongside, import, one find-and-replace, then uninstall Lab Reports.
+---
+
 # Migrating from Lab Reports
 
 The short version: install Reportr, run the importer, change `craft.labreports` to `craft.reportr`
@@ -128,8 +135,8 @@ of them — and keep `config/labreports.php` if you have not moved your formatti
 - **Reports on ephemeral hosting.** If you were losing files on Heroku or a scaled container, point
   Reportr at a Craft filesystem in its settings. That is the fix for the problem, not a workaround
   for it.
-- **Reports that were timing out.** Raise the job timeout. Craft's default of 300 seconds is
-  Reportr's 3600.
+- **Reports that were timing out.** Raise the job timeout. Craft's queue default is 300 seconds;
+  Reportr's is 3600.
 - **Reports that differ only by a hard-coded date.** Give one of them a date parameter and delete
   the rest.
 - **CSVs people open in Excel.** Switch the format to XLSX.

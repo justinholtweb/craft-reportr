@@ -1,12 +1,5 @@
-{% set colours = {
-    queued: 'gray',
-    running: 'blue',
-    finished: 'green',
-    error: 'red',
-} %}
-
 <div class="reportr-status-banner">
-    <span class="status {{ colours[run.runStatus] ?? 'gray' }}"></span>
+    {% include 'reportr/runs/_status-dot' with { status: run.runStatus } only %}
     <span>
         {% if run.runStatus == 'finished' %}
             {{ '{rows} rows written to {filename}.'|t('reportr', { rows: run.totalRows|number, filename: run.filename }) }}
@@ -21,5 +14,5 @@
 </div>
 
 {% css %}
-.reportr-status-banner { display: flex; align-items: center; gap: .5rem; margin-bottom: 1.5rem; font-size: 14px; }
+.reportr-status-banner { display: flex; align-items: center; gap: var(--s); margin-bottom: var(--xl); }
 {% endcss %}

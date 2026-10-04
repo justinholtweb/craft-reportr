@@ -188,11 +188,16 @@ Column keys are a three-prefix mini-language:
 | `field:bookAuthor.title` | One property of every related element, joined |
 | `field:priceTable.amount` | One column out of a Table field |
 | `field:specs.0.price` | One row of one, by index |
-| `twig:{{ object.title\|upper }} ({{ object.id }})` | An object template, for anything else |
+| `twig:{{ object.title\|upper }} ({{ object.id }})` | An object template, for anything else — admins only |
 
 An unprefixed key (`title`) is read as an attribute. A key pointing at something the element does
 not have gives an empty cell, not a failed report — which matters on a source holding more than
 one entry type.
+
+A `twig:` column is real Twig, not a sandbox — it can reach `craft.app` like any template — so
+only an admin can add or change one. Anyone who can manage reports can keep or remove an admin's.
+No column ever reads a user's password hash, verification code or other credential, however the
+path reaches it, and **Order by** must be a column name; anything else is ignored.
 
 ## Parameters
 
@@ -220,8 +225,11 @@ categories, assets, tags, and site.
 parameter defaulting to `-7 days` means the last seven days *from each run*, not from the day
 somebody typed it.
 
-On a query report, a parameter whose name matches an element-query parameter — `sectionId`,
-`postDate`, `authorId` — is applied to the query automatically, with no configuration at all.
+On a query report, a parameter named after one of a fixed set of query params — `postDate`, `expiryDate`, `dateCreated`, `dateUpdated`, `lastLoginDate`, `relatedTo`, `search`, `level`, `kind`, `sectionId`, `typeId`, `authorId`, `authorGroupId`, `groupId`, `volumeId` and `folderId` — is applied
+to the query automatically. It can only **narrow** what the report's source shows: a `sectionId`
+answer outside the source's own sections matches nothing, and `relatedTo` is added to the source's
+relations rather than replacing them. Names like `where`, `orderBy` or `editable` are reserved and
+can't be given to a parameter at all.
 
 From the command line:
 
@@ -244,11 +252,12 @@ php craft reportr/reports/build --report=orders --params='{"since":"-30 days","r
 Any single character can be the CSV delimiter, and the format's options (delimiter, enclosure, BOM,
 sheet name, XML element names, pretty-printing) are per report.
 
-**Formula injection is neutralised by default.** A cell beginning `=`, `+`, `-` or `@` executes as
+**Formula injection is neutralised by default** in CSV and TSV. A cell beginning `=`, `+`, `-` or `@` executes as
 a formula when a spreadsheet opens the file, so an export of anything a member of the public typed
 is a way to run code on the machine of whoever opens the report. Reportr prefixes those cells with
 an apostrophe, which spreadsheets hide. Negative numbers are exempt. There is a switch if something
-downstream needs the raw text.
+downstream needs the raw text. XLSX needs no prefix: text goes in as string cells, which a spreadsheet
+never evaluates.
 
 ## Where files are stored
 
@@ -313,8 +322,8 @@ Failure-only delivery is the setting worth knowing about. The run that matters m
 did not work, and a report that only emails on success is one whose Monday export can be broken for
 five weeks before anybody notices.
 
-Recipient fields accept environment variables, so `$REPORT_RECIPIENTS` keeps addresses out of
-project config and out of database backups.
+Recipient fields accept environment variables. `$REPORT_RECIPIENTS` is stored as written and resolved
+when the email is sent, so the addresses stay out of the database and its backups.
 
 ## Retention
 
@@ -403,6 +412,29 @@ own attribute values, because every Craft element is `Traversable`.
 The two are deliberately separate. A report's *output* is the data: somebody who may see that the
 "Members export" exists is not thereby somebody who may download every member's email address.
 
+### What someone who isn't an admin may report on
+
+A report reads content in bulk, so building one takes what reading that content in the control
+panel takes:
+
+- **Entries, categories and assets** — a source they can view. Not *All*, which includes sources
+  they can't.
+- **Users** — with permission to view users. **Commerce orders** — with permission to manage
+  orders. **Products and variants** — a product type they can view.
+- **Anything else** — addresses, another plugin's elements — needs an admin.
+
+Beyond the source, someone who isn't an admin can't:
+
+- add or change a `twig:` column, or a column that reaches a user (an author, an uploader, a Users
+  field) without permission to view users
+- change a report's type, template, formatting function, storage location or filename pattern
+- change who it is emailed to, or whether the file is attached, without **Download report files**
+  — otherwise "manage reports" would be a way round "download"
+
+Only changes are checked: someone can rename or reschedule a report an admin built over users
+without needing the users permission. **Running** a report is its own permission and runs what
+the report's builder chose — so give it to people who may see that output.
+
 ## Settings
 
 **Reportr → Settings**, or `config/reportr.php` (which wins).
@@ -410,8 +442,8 @@ The two are deliberately separate. A report's *output* is the data: somebody who
 | Setting | Default | |
 | --- | --- | --- |
 | `fsHandle` | none | Craft filesystem for report files |
-| `fsSubpath` | `reports` | Subfolder within it |
-| `storageFolder` | `storage/reportr` | Local fallback |
+| `fsSubpath` | `reports` | Subfolder within it. `..` is never followed |
+| `storageFolder` | blank (`storage/reportr`) | Local fallback |
 | `jobTtr` | `3600` | Seconds a queued build may take |
 | `batchSize` | `100` | Rows fetched at a time |
 | `memoryLimit` | `512M` | Applied for the build and put back. Never lowers the server's own |
@@ -468,7 +500,7 @@ Event::on(Runner::class, Runner::EVENT_AFTER_RUN, function(RunEvent $event) {
 
 **A report fails only on a schedule.** Anything that reads the current user or the current request
 will not find one in a queue job. Parameters are answered from their defaults on a scheduled run,
-so a required parameter with no default has no answer.
+so a required parameter with no default has no answer — the run fails and says which one.
 
 **`exceeded the timeout of 300 seconds`.** Raise the job timeout in Reportr's settings.
 

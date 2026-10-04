@@ -17,30 +17,38 @@
             }) }}
         </p>
 
-        <p class="light">
+        <div class="light">
             {{ 'Your report **templates do not need changing**. Reportr’s basic and advanced types call the same methods on the same `report` variable, and advanced reports keep using the formatting functions in `config/labreports.php`. Nothing in the Lab Reports tables is modified, and the import can safely be run twice — anything already brought across is skipped.'|t('reportr')|md }}
-        </p>
+        </div>
 
         {% if legacyFolder %}
             <p class="light">{{ 'Report files will be copied from `{folder}`.'|t('reportr', { folder: legacyFolder })|md(inlineOnly=true) }}</p>
         {% else %}
-            <p class="warning">{{ 'The old report folder could not be found, so files will not be copied. The configurations and the history still import.'|t('reportr') }}</p>
+            <p class="warning has-icon">
+                <span class="icon" aria-hidden="true"></span>
+                <span class="visually-hidden">{{ 'Warning:'|t('app') }}</span>
+                <span>{{ 'The old report folder could not be found, so files will not be copied. The configurations and the history still import.'|t('reportr') }}</span>
+            </p>
         {% endif %}
 
         <form method="post" accept-charset="UTF-8">
             {{ csrfInput() }}
-            <input type="hidden" name="action" value="reportr/import/run">
+            {{ actionInput('reportr/import/run') }}
 
-            {{ forms.checkboxField({
+            {# A lightswitch always posts a value; an unticked checkbox posts nothing, which the
+               controller would read as its default of "yes". #}
+            {{ forms.lightswitchField({
                 label: 'Bring the run history across'|t('reportr'),
                 name: 'includeRuns',
-                checked: true,
+                on: true,
             }) }}
 
-            {{ forms.checkboxField({
+            {# A lightswitch always posts a value; an unticked checkbox posts nothing, which the
+               controller would read as its default of "yes". #}
+            {{ forms.lightswitchField({
                 label: 'Copy the generated files'|t('reportr'),
                 name: 'copyFiles',
-                checked: true,
+                on: true,
             }) }}
 
             <div class="buttons">
@@ -56,17 +64,21 @@
 
         <table class="data fullwidth">
             <tbody>
-                <tr><th>{{ 'Reports imported'|t('reportr') }}</th><td>{{ summary.reportsImported }} {% if summary.reportsSkipped %}<span class="light">({{ summary.reportsSkipped }} already there)</span>{% endif %}</td></tr>
-                <tr><th>{{ 'Runs imported'|t('reportr') }}</th><td>{{ summary.runsImported }} {% if summary.runsSkipped %}<span class="light">({{ summary.runsSkipped }} already there)</span>{% endif %}</td></tr>
-                <tr><th>{{ 'Files copied'|t('reportr') }}</th><td>{{ summary.filesCopied }} {% if summary.filesMissing %}<span class="light">({{ summary.filesMissing }} missing)</span>{% endif %}</td></tr>
+                <tr><th>{{ 'Reports imported'|t('reportr') }}</th><td>{{ summary.reportsImported }} {% if summary.reportsSkipped %}<span class="light">{{ '({count} already there)'|t('reportr', { count: summary.reportsSkipped }) }}</span>{% endif %}</td></tr>
+                <tr><th>{{ 'Runs imported'|t('reportr') }}</th><td>{{ summary.runsImported }} {% if summary.runsSkipped %}<span class="light">{{ '({count} already there)'|t('reportr', { count: summary.runsSkipped }) }}</span>{% endif %}</td></tr>
+                <tr><th>{{ 'Files copied'|t('reportr') }}</th><td>{{ summary.filesCopied }} {% if summary.filesMissing %}<span class="light">{{ '({count} missing)'|t('reportr', { count: summary.filesMissing }) }}</span>{% endif %}</td></tr>
             </tbody>
         </table>
 
         {% if summary.warnings|length %}
             <h3>{{ 'Warnings'|t('reportr') }}</h3>
-            <ul class="errors">
-                {% for warning in summary.warnings %}<li>{{ warning }}</li>{% endfor %}
-            </ul>
+            {% for warning in summary.warnings %}
+                <p class="warning has-icon">
+                    <span class="icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">{{ 'Warning:'|t('app') }}</span>
+                    <span>{{ warning }}</span>
+                </p>
+            {% endfor %}
         {% endif %}
 
         {% if summary.log|length %}

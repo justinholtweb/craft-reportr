@@ -71,6 +71,15 @@ makes a scheduled report worth scheduling.
 succeeds if the row still holds the value it was read with. A cron entry and the CP fallback both
 running is the normal state of affairs, and without the claim they both fire.
 
+## Who may report on what
+
+`helpers\Access` + `Report::validateAccess()`. Non-admins: an element type + source they can view
+in the CP (Craft filters entry/category/asset index sources by the signed-in user; users, orders
+and product types are checked by permission), never `*` where that would reach hidden sources, and
+no new or changed `twig:` column — `renderObjectTemplate()` is **not** a sandbox. Only what changed
+is checked, so editing an admin's report doesn't need the admin's reach. `QueryBuilder` never reads
+password-like segments and only orders by a column name (Yii passes `(…)` through unquoted).
+
 ## Traps found while building this
 
 - **`Session::finish()` clears the "opened" flag**, and the runner asks *after* closing whether the
@@ -100,6 +109,24 @@ running is the normal state of affairs, and without the claim they both fire.
   holding every distinct string until close, which trades exactly the wrong way for a large export.
 - **Twig filters must be prefixed.** A later extension silently replaces a filter of the same name,
   so `cell`, `column` and `values` are `reportCell`, `reportColumn`, `reportValues`.
+- **A build resolves its source in `CONTEXT_FIELD`, never `CONTEXT_INDEX`.** Craft builds index
+  sources around the signed-in user and adds `editable: true`, so a scheduled or console build —
+  nobody signed in — aborted with zero rows, and a web-queue build ran with the reach of whoever's
+  request happened to run the queue. Access is settled at save; the build runs what was saved.
+- **Parameters reach a query only through `QueryBuilder::QUERY_PARAMS`, by method, and ID params
+  are intersected with the source's.** Writing `$query->{$name}` let a parameter called `where`,
+  `orderBy`, `sectionId` or `editable` inject SQL or swap the source for a hidden one.
+- **`requireAdmin(false)` on the settings and import controllers**, `requireAdmin()` only on the
+  settings save. The default also demands `allowAdminChanges`, which 403'd the importer and the
+  schedule refresh on production, where the Lab Reports history actually lives.
+- **A GET to the run URL only renders the form.** It used to start a parameterless report, which
+  made any link a CSRF.
+- **Duplicate needs `beforeValidate()`**: Craft validates the copy, the handle collides, and the
+  action fails outright. The copy is also disabled, so a scheduled report doesn't mail twice.
+- **An import option is a lightswitch, not a checkbox**: an unticked checkbox posts nothing, and the
+  controller's default of `true` won.
+- **Parameter labels and instructions are encoded before markdown** (`Parameter::safeLabel` /
+  `safeInstructions`) — Craft's field instructions render raw HTML, and a non-admin writes them.
 
 See `[[craft-plugin-gotchas]]` in the shared memory for family-wide traps — the nested-form
 corruption, the typed-`int` `''` TypeError, `Craft::configure()` assigning straight to element-query
@@ -112,7 +139,11 @@ No local PHP on this Mac. Everything runs in the plugin-testing container.
 
 ```sh
 docker exec -w /var/www/html ddev-plugin-testing-web \
-  php /var/www/craft-reportr/tests/integration/checks.php     # 91 checks
+  php /var/www/craft-reportr/tests/integration/checks.php     # 103 checks
+docker exec -w /var/www/html ddev-plugin-testing-web \
+  php /var/www/craft-reportr/tests/integration/security.php   # 29, editors and a viewer over HTTP
+docker exec -w /sites/craft-reportr ddev-phpstan-runner-web \
+  bash -c 'vendor/bin/phpstan analyse --memory-limit=1G && vendor/bin/ecs check'
 
 docker exec ddev-plugin-testing-web bash -c \
   'find /var/www/craft-reportr/src -name "*.php" -print0 | xargs -0 -n1 php -l'
@@ -128,8 +159,17 @@ Two harness notes, neither of them the plugin's fault:
   `docker start ddev-plugin-testing-db ddev-plugin-testing-web` and a readiness loop does not.
 - `craft-csr`'s `Ticket::getStatus()` has an incompatible return type and fatals every **web**
   request in the harness (console is fine). Disable it while checking CP screens.
+- The harness **ends an admin session after a few minutes**, and a save that bounces to the login
+  screen (302) looks exactly like a save that was refused. `security.php` signs the admin in again
+  for its late checks and proves each refusal with a control save that must succeed;
+  `REPORTR_DEBUG=1` prints the status of every save that came back empty. If every admin save
+  fails, reset the password through the element (see the shared harness memory).
 
 ## Coding conventions
+
+Deliberately the family's, not michtio's skill, where the two differ: the main class is `Plugin`,
+services are declared in `config()` and read as `->runner`, permission handles are camelCase, and
+files declare `strict_types`. Don't "fix" these in one plugin.
 
 - `Craft::t('reportr', '…')` for user-facing strings
 - Business logic in services; controllers stay thin

@@ -52,7 +52,7 @@ class RunQuery extends ElementQuery
 
             // No match must return nothing, not everything. `false` is Craft's convention for a
             // parameter that can never be satisfied.
-            $this->reportId = $report?->id ?? false;
+            $this->reportId = $report->id ?? false;
 
             return $this;
         }

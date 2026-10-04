@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace justinholtweb\reportr\migrations;
 
+use Craft;
 use craft\db\Migration;
+use craft\db\Query;
 use craft\db\Table as CraftTable;
+use craft\helpers\FileHelper;
+use justinholtweb\reportr\queue\jobs\BuildReport;
 use justinholtweb\reportr\records\Table;
 
 /**
@@ -33,6 +37,11 @@ class Install extends Migration
 {
     public function safeUp(): bool
     {
+        // A re-run would stack duplicate indexes and foreign keys on the existing tables.
+        if ($this->db->tableExists(Table::REPORTS)) {
+            return true;
+        }
+
         $this->createTable(Table::REPORTS, [
             'id' => $this->integer()->notNull(),
             'handle' => $this->string(64)->notNull(),
@@ -116,6 +125,9 @@ class Install extends Migration
         $this->dropTableIfExists(Table::RUNS);
         $this->dropTableIfExists(Table::REPORTS);
 
+        $this->releaseQueuedBuilds();
+        $this->removeDefaultStorage();
+
         $this->delete(CraftTable::ELEMENTS, [
             'type' => [
                 \justinholtweb\reportr\elements\Report::class,
@@ -124,5 +136,39 @@ class Install extends Migration
         ]);
 
         return true;
+    }
+
+    /** A queued build outlives the plugin otherwise, and fails on a class that no longer exists. */
+    private function releaseQueuedBuilds(): void
+    {
+        if (!$this->db->tableExists(CraftTable::QUEUE)) {
+            return;
+        }
+
+        $rows = (new Query())->select(['id', 'job'])->from(CraftTable::QUEUE)->all($this->db);
+
+        foreach ($rows as $row) {
+            // PostgreSQL hands a bytea column back as a stream.
+            $job = is_resource($row['job']) ? stream_get_contents($row['job']) : (string)$row['job'];
+
+            if (str_contains($job, BuildReport::class)) {
+                $this->delete(CraftTable::QUEUE, ['id' => $row['id']]);
+            }
+        }
+    }
+
+    /**
+     * Removes `storage/reportr`, the folder the plugin made for itself.
+     *
+     * Only that one: a custom local folder or a Craft filesystem was chosen by somebody, may hold
+     * other things, and is left exactly as it is.
+     */
+    private function removeDefaultStorage(): void
+    {
+        $folder = Craft::$app->getPath()->getStoragePath() . DIRECTORY_SEPARATOR . 'reportr';
+
+        if (is_dir($folder)) {
+            FileHelper::removeDirectory($folder);
+        }
     }
 }

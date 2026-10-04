@@ -20,7 +20,6 @@ use justinholtweb\reportr\events\RunEvent;
 use justinholtweb\reportr\Plugin;
 use justinholtweb\reportr\queue\jobs\BuildReport;
 use Throwable;
-use yii\base\Event;
 
 /**
  * Runs reports.
@@ -133,12 +132,25 @@ class Runner extends Component
             return $run;
         }
 
+        $params = $plugin->reports->normalizeParams($report, $run->getParams());
+
+        // The control panel and `reports/build` check the answers before queueing; a schedule or
+        // `craft.reportr.queue()` does not, and a required parameter with no answer and no default
+        // would otherwise reach the template as null and produce a quietly wrong file.
+        $paramErrors = $plugin->reports->validateParams($report, $params);
+
+        if ($paramErrors !== []) {
+            $run->updateStatus(Run::STATUS_ERROR, implode("\n", $paramErrors));
+            $this->afterRun($report, $run);
+
+            return $run;
+        }
+
         $started = microtime(true);
         $run->dateStarted = DateTimeHelper::currentUTCDateTime();
         $run->updateStatus(Run::STATUS_RUNNING);
 
         $restoreMemory = $this->raiseLimits($settings->memoryLimit, $settings->timeLimit);
-        $params = $plugin->reports->normalizeParams($report, $run->getParams());
 
         $extension = $plugin->formats->extension($report->format);
         $filename = $plugin->reports->buildFilename($report, $extension, $params);
@@ -481,11 +493,12 @@ class Runner extends Component
         }
 
         return static function() use ($oldMemory, $oldTime): void {
-            if ($oldMemory !== false) {
+            // ini_get() is typed `string` but returns false for an unknown directive.
+            if ($oldMemory !== false) { // @phpstan-ignore notIdentical.alwaysTrue
                 @ini_set('memory_limit', $oldMemory);
             }
 
-            if ($oldTime !== false) {
+            if ($oldTime !== false) { // @phpstan-ignore notIdentical.alwaysTrue
                 @set_time_limit((int)$oldTime);
             }
         };

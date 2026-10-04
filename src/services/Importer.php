@@ -9,7 +9,6 @@ use craft\base\Component;
 use craft\db\Query;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Db;
-use craft\helpers\FileHelper;
 use craft\helpers\StringHelper;
 use justinholtweb\reportr\elements\Report;
 use justinholtweb\reportr\elements\Run;
@@ -185,8 +184,13 @@ class Importer extends Component
             $run = new Run();
             $run->reportId = $reportId;
             $run->legacyId = $legacyId;
-            $run->filename = $row['filename'] ?: null;
-            $run->path = $row['filename'] ?: null;
+            // Lab Reports stored a bare filename. Anything with a directory in it is cut back to
+            // its last segment: the value is read from another plugin's table and later becomes
+            // a path that is copied from and, by retention, deleted.
+            $legacyName = basename(str_replace('\\', '/', (string)($row['filename'] ?? '')));
+            $legacyName = in_array($legacyName, ['', '.', '..'], true) ? null : $legacyName;
+            $run->filename = $legacyName;
+            $run->path = $legacyName;
             $run->format = $this->formatFromFilename((string)$row['filename']);
             $run->totalRows = (int)($row['totalRows'] ?? 0);
             $run->userId = $row['userId'] ? (int)$row['userId'] : null;
@@ -260,7 +264,13 @@ class Importer extends Component
             return;
         }
 
-        $source = $legacyFolder . DIRECTORY_SEPARATOR . $run->filename;
+        if ($run->filename === null || $run->filename === '') {
+            $summary->filesMissing++;
+
+            return;
+        }
+
+        $source = $legacyFolder . DIRECTORY_SEPARATOR . basename($run->filename);
 
         if (!is_file($source)) {
             $summary->filesMissing++;

@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<!-- handmade: hand-tuned deck -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reportr — Plugin Store promos</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --charcoal: #14120c;
+    --charcoal-light: #1a1a2e;
+    --charcoal-lighter: #252540;
+    --accent: #8A750C;
+    --accent-light: #E8CF6A;
+    --accent-mid: #C9A92A;
+    --sage: #9FD3C7;
+    --gold: #9FD3C7;
+    --off-white: #f0f0f5;
+  }
+
+  html { background: #000; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: var(--off-white);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- slide shell ---------------------------------------------------- */
+  .slide {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 85% 15%, rgba(138, 117, 12, 0.36) 0%, transparent 40%),
+      radial-gradient(ellipse at 65% 5%,  rgba(232, 207, 106, 0.12) 0%, transparent 35%),
+      radial-gradient(ellipse at 15% 85%, rgba(159, 211, 199, 0.06) 0%, transparent 40%),
+      radial-gradient(ellipse at 35% 95%, rgba(138, 117, 12, 0.14) 0%, transparent 35%),
+      linear-gradient(135deg, #12110c 0%, #17150d 30%, #1b1810 60%, #12110c 100%);
+  }
+
+  /* Oversized watermark: the mark with the tile stripped, because a rounded square at this
+     size reads as a grey box across the slide rather than as the icon. Anchored bottom-right and
+     running off the right and bottom edges. Only the three bars: the page is a flat fill and
+     would read as a box. */
+  .slide::after {
+    content: '';
+    position: absolute;
+    top: 30%;
+    right: -12%;
+    width: 1300px;
+    height: 1100px;
+    background: url('assets/watermark.svg') no-repeat center / contain;
+    opacity: 0.045;
+    pointer-events: none;
+    /* Fade the bars out downwards, so no straight edge closes them back into boxes. */
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,0.5) 45%, transparent 85%);
+            mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,0.5) 45%, transparent 85%);
+  }
+
+  /* The cover has the icon itself; a watermark behind it reads as its shadow. */
+  .cover::after { display: none; }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light), var(--gold), var(--accent));
+    z-index: 5;
+  }
+
+  .inner {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    padding: 118px 130px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ---- type ------------------------------------------------------------ */
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(240, 240, 245, 0.62);
+    margin-bottom: 34px;
+  }
+  .eyebrow .rule {
+    width: 58px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--accent-light);
+  }
+
+  h1, h2 {
+    font-family: 'Jersey 20', sans-serif;
+    font-weight: 400;
+    line-height: 0.9;
+    letter-spacing: 0.005em;
+  }
+
+  .gradient-text {
+    background: linear-gradient(100deg, #C9A92A 0%, #F2DF8C 40%, #9FD3C7 72%, #C9A92A 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .lede {
+    font-size: 34px;
+    line-height: 1.5;
+    color: rgba(240, 240, 245, 0.72);
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  /* ---- cover ----------------------------------------------------------- */
+  .cover .inner { gap: 90px; }
+  .cover .copy { flex: 1 1 auto; }
+  .cover h1 { font-size: 168px; margin-bottom: 26px; }
+  .cover .tagline {
+    font-size: 46px;
+    line-height: 1.25;
+    color: rgba(240, 240, 245, 0.78);
+    margin-bottom: 46px;
+    max-width: 900px;
+  }
+  .cover .badges { display: flex; gap: 18px; align-items: center; }
+  .badge {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 14px 26px;
+    border-radius: 999px;
+    border: 2px solid rgba(232, 207, 106, 0.45);
+    color: rgba(240, 240, 245, 0.85);
+  }
+  .badge.free { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cover .mark { flex: 0 0 auto; }
+  .cover .mark img { width: 420px; height: 420px; display: block; }
+
+  /* ---- feature slides -------------------------------------------------- */
+  .feature .inner { padding-right: 0; }
+  .feature .copy { width: 760px; flex: 0 0 auto; }
+  .feature h2 { font-size: 96px; margin-bottom: 30px; }
+  .feature .lede { max-width: 700px; }
+
+  .points { list-style: none; margin-top: 40px; display: flex; flex-direction: column; gap: 20px; }
+  .points li {
+    display: flex;
+    gap: 16px;
+    font-size: 25px;
+    line-height: 1.4;
+    color: rgba(240, 240, 245, 0.6);
+  }
+  .points li svg { flex: 0 0 auto; margin-top: 4px; }
+
+  /* ---- screenshot slabs ------------------------------------------------ */
+  .shot {
+    position: absolute;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .shot .chrome {
+    height: 40px;
+    background: #2a2a3e;
+    background-image:
+      radial-gradient(circle at 24px 20px, #ff5f57 6px, transparent 6.5px),
+      radial-gradient(circle at 48px 20px, #ffbd2e 6px, transparent 6.5px),
+      radial-gradient(circle at 72px 20px, #28ca42 6px, transparent 6.5px);
+  }
+  .shot .viewport { overflow: hidden; background: #e4edf6; position: relative; }
+  .shot img { display: block; width: 100%; position: absolute; left: 0; }
+
+  .caption {
+    font-size: 22px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(240, 240, 245, 0.5);
+    margin-bottom: 14px;
+  }
+  .caption b { color: var(--accent-light); font-weight: 600; }
+
+  /* ---- before / after -------------------------------------------------- */
+  .compare .inner { flex-direction: column; align-items: flex-start; padding-bottom: 60px; }
+  .compare h2 { font-size: 88px; margin-bottom: 18px; }
+  .compare .lede { font-size: 30px; max-width: 1280px; margin-bottom: 44px; }
+  .compare .pair { display: flex; gap: 56px; width: 100%; }
+  .compare .pane { flex: 1 1 0; min-width: 0; }
+  .compare .shot { position: relative; }
+
+  .arrow {
+    position: absolute;
+    left: 50%;
+    top: 640px;
+    transform: translateX(-50%);
+    z-index: 4;
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 12px 40px rgba(138,117,12,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---- closing panel --------------------------------------------------- */
+  .closing .inner { flex-direction: column; align-items: flex-start; justify-content: center; }
+  .closing h2 { font-size: 104px; margin-bottom: 34px; }
+  .closing .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 26px 54px;
+    margin-top: 20px;
+    width: 1420px;
+  }
+  .closing .cell {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background: rgba(37, 37, 64, 0.42);
+    padding: 28px 32px;
+  }
+  .closing .cell b { display: block; font-size: 28px; margin-bottom: 8px; color: var(--off-white); }
+  .closing .cell span { font-size: 23px; line-height: 1.45; color: rgba(240, 240, 245, 0.58); }
+
+  /* ---- layout diagram slide -------------------------------------------- */
+  .diagram {
+    position: absolute;
+    right: 130px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 800px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(15, 15, 26, 0.72);
+    padding: 44px 48px;
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 26px;
+    line-height: 1.65;
+    color: rgba(240, 240, 245, 0.72);
+    white-space: pre;
+  }
+  .diagram .tab { color: var(--off-white); font-weight: 600; }
+  .diagram .marker { color: var(--accent-light); }
+  .diagram .dim { color: rgba(240, 240, 245, 0.38); }
+  .diagram .gold { color: var(--gold); }
+
+  /* ---- footer lockup --------------------------------------------------- */
+  .footer {
+    position: absolute;
+    left: 130px;
+    bottom: 54px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 22px;
+    color: rgba(240, 240, 245, 0.42);
+  }
+  .footer img { width: 40px; height: 40px; border-radius: 9px; }
+  .footer b { color: rgba(240, 240, 245, 0.72); font-weight: 600; }
+
+  /* Only render the requested slide when screenshotting */
+  body.single .slide { display: none; }
+  body.single .slide.active { display: block; }
+
+  /* ---- control-panel screenshot cards -------------------------------
+     Self-contained: these cards must drop into any deck in the family, and the decks
+     do not share a class system. Only --accent and --off-white are relied on, both of
+     which every deck defines, and both have fallbacks. */
+  .slide.cpcard { display: block; }
+  .cpcard .cpc-inner {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    padding: 112px 120px;
+    display: flex;
+    align-items: center;
+    gap: 70px;
+  }
+  .cpcard .cpc-copy { width: 660px; flex: 0 0 660px; }
+
+  .cpcard .cpc-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 34px;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent-light, #7aa2c8);
+  }
+  .cpcard .cpc-eyebrow i {
+    display: block;
+    width: 62px;
+    height: 3px;
+    background: var(--accent-light, #7aa2c8);
+    border-radius: 2px;
+  }
+
+  .cpcard .cpc-h2 {
+    font-family: 'Jersey 20', 'Inter', sans-serif;
+    font-size: 88px;
+    line-height: 0.96;
+    font-weight: 400;
+    letter-spacing: 0.005em;
+    margin: 0 0 28px;
+    color: var(--off-white, #f0f0f5);
+  }
+
+  .cpcard .cpc-lede {
+    font-size: 33px;
+    line-height: 1.42;
+    color: rgba(240, 240, 245, 0.66);
+    margin: 0;
+  }
+
+  .cpcard .cpc-points { list-style: none; margin: 40px 0 0; padding: 0; }
+  .cpcard .cpc-points li {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: 26px;
+    line-height: 1.5;
+    color: rgba(240, 240, 245, 0.72);
+    margin-bottom: 18px;
+  }
+  .cpcard .cpc-points li::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    margin-top: 14px;
+    border-radius: 50%;
+    background: var(--accent, #7aa2c8);
+  }
+
+  .cpcard .cpc-panel { flex: 1 1 auto; min-width: 0; }
+
+  .cpcard .cpc-frame {
+    border-radius: 14px;
+    overflow: hidden;
+    background: #e4edf6;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55), 0 6px 18px rgba(0, 0, 0, 0.35);
+  }
+  .cpcard .cpc-chrome {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 13px 18px;
+    background: linear-gradient(180deg, #2a2a3d 0%, #21212f 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  }
+  .cpcard .cpc-chrome b { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.16); }
+  .cpcard .cpc-chrome b:nth-child(1) { background: #ff5f57; }
+  .cpcard .cpc-chrome b:nth-child(2) { background: #febc2e; }
+  .cpcard .cpc-chrome b:nth-child(3) { background: #28c840; }
+  .cpcard .cpc-chrome em {
+    margin-left: 12px;
+    font-style: normal;
+    font-size: 19px;
+    letter-spacing: 0.02em;
+    color: rgba(240, 240, 245, 0.45);
+  }
+  .cpcard .cpc-frame img { display: block; width: 100%; height: auto; }
+
+  /* A tall capture is anchored to its top — the interesting rows are always first.
+     The fade makes the cut read as "there is more" rather than as a broken edge. */
+  .cpcard .cpc-frame.cpc-clip { max-height: 620px; position: relative; }
+  .cpcard .cpc-frame.cpc-clip img { object-fit: cover; object-position: top center; max-height: 580px; }
+  .cpcard .cpc-frame.cpc-clip::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 130px;
+    background: linear-gradient(180deg, rgba(228,237,246,0) 0%, rgba(228,237,246,0.92) 78%, #e4edf6 100%);
+  }
+
+  .cpcard .cpc-caption {
+    display: block;
+    margin-top: 20px;
+    font-size: 22px;
+    line-height: 1.45;
+    color: rgba(240, 240, 245, 0.52);
+  }
+  .cpcard .cpc-caption b { color: rgba(240, 240, 245, 0.80); font-weight: 600; }
+
+
+
+  /* ---- code panels ------------------------------------------------------ */
+  .code {
+    position: absolute; right: 110px; top: 50%; transform: translateY(-50%); width: 960px;
+    border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(15,15,26,0.8);
+    padding: 36px 42px; font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 22px; line-height: 1.75; color: rgba(240,240,245,0.62); white-space: pre;
+  }
+  .code .file { display: block; font-family: 'Inter', sans-serif; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,240,245,0.4); margin-bottom: 14px; }
+  .code .k { color: rgba(240,240,245,0.42); }
+  .code .hl { color: #fff; background: rgba(138,117,12,0.55); border-radius: 6px; padding: 2px 6px; margin-left: -6px; }
+  .code .gold { color: var(--gold); }
+  .code .acc { color: var(--accent-light); }
+
+  /* ---- one field, many layouts (slide 4) ---------------------------------- */
+  .refs { position: absolute; right: 110px; top: 50%; transform: translateY(-50%); width: 980px; display: flex; flex-direction: column; gap: 18px; }
+  .ref { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(15,15,26,0.72); padding: 26px 34px; }
+  .ref b { font-size: 28px; color: var(--off-white); display: block; }
+  .ref small { font-size: 20px; color: rgba(240,240,245,0.48); }
+  .ref code { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 28px; color: var(--accent-light); }
+  .ref.renamed { border-color: rgba(255,209,102,0.55); }
+  .ref.renamed code { color: var(--gold); }
+
+  /* ---- tip states (slide 6) ----------------------------------------------- */
+  .states { position: absolute; right: 110px; top: 50%; transform: translateY(-50%); width: 920px; display: flex; flex-direction: column; gap: 18px; }
+  .state { border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(15,15,26,0.72); padding: 26px 32px; display: grid; grid-template-columns: 260px 1fr; gap: 26px; align-items: center; }
+  .state .pill { display: inline-flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .state .pill::before { content: ''; width: 14px; height: 14px; border-radius: 50%; background: currentColor; }
+  .state span { font-size: 23px; line-height: 1.45; color: rgba(240,240,245,0.62); }
+  .state.green .pill { color: #5ee0a0; } .state.orange .pill { color: #f6a35c; } .state.blue .pill { color: #7cb7ff; }
+  .state.person { border-color: rgba(124,183,255,0.5); background: rgba(40,70,120,0.22); }
+
+  /* cropped CP captures inside a cpcard frame */
+  .cpcard .cpc-frame.fixed { position: relative; }
+  .cpcard .cpc-frame .cut { overflow: hidden; position: relative; }
+  .cpcard .cpc-frame .cut img { position: absolute; left: 0; top: 0; }
+  /* ---- Reportr-specific mocks ------------------------------------------- */
+  .badge.price { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* A control-panel panel drawn in HTML: dark CP, like the family's demos. */
+  .cp { position: absolute; right: 110px; top: 50%; transform: translateY(-50%); width: 940px;
+        border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10);
+        background: #1d1f24; box-shadow: 0 40px 90px rgba(0,0,0,0.55); }
+  .cp .bar { display: flex; align-items: center; gap: 9px; padding: 13px 18px; background: #26282e; border-bottom: 1px solid rgba(0,0,0,0.4); }
+  .cp .bar b { width: 12px; height: 12px; border-radius: 50%; }
+  .cp .bar b:nth-child(1) { background: #ff5f57; } .cp .bar b:nth-child(2) { background: #febc2e; } .cp .bar b:nth-child(3) { background: #28c840; }
+  .cp .bar em { margin-left: 12px; font-style: normal; font-size: 19px; color: rgba(240,240,245,0.45); }
+  .cp .body { padding: 34px 40px 38px; }
+  .cp h3 { font-size: 32px; font-weight: 700; margin-bottom: 26px; color: var(--off-white); }
+  .cp .f { margin-bottom: 22px; }
+  .cp .f label { display: block; font-size: 20px; font-weight: 600; color: rgba(240,240,245,0.86); margin-bottom: 4px; }
+  .cp .f small { display: block; font-size: 17px; color: rgba(240,240,245,0.45); margin-bottom: 9px; }
+  .cp .in { display: flex; align-items: center; justify-content: space-between; font-size: 21px; color: var(--off-white);
+            background: #2a2d34; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; padding: 12px 16px; }
+  .cp .in .typ { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-light);
+                 border: 1px solid rgba(232,207,106,0.4); border-radius: 999px; padding: 3px 11px; }
+  .cp .chip { display: inline-flex; align-items: center; gap: 10px; background: #353943; border-radius: 6px; padding: 5px 12px; font-size: 20px; }
+  .cp .chip::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #5ee0a0; }
+  .cp .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .cp .btns { display: flex; gap: 14px; margin-top: 10px; }
+  .cp .btn { font-size: 20px; font-weight: 600; padding: 12px 24px; border-radius: 7px; background: #353943; color: var(--off-white); }
+  .cp .btn.go { background: #E12D39; color: #fff; }
+  .cp .resolved { color: var(--sage); font-size: 18px; }
+
+  /* column picker */
+  .cols { width: 100%; border-collapse: collapse; font-size: 20px; }
+  .cols th { text-align: left; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,240,245,0.45); padding: 0 12px 10px; font-weight: 600; }
+  .cols td { padding: 12px; border-top: 1px solid rgba(255,255,255,0.07); color: rgba(240,240,245,0.85); }
+  .cols td code { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 19px; color: var(--accent-light); }
+  .cols td code.tw { color: var(--sage); }
+  .cols td .grip { color: rgba(240,240,245,0.3); margin-right: 8px; }
+
+  /* formats */
+  .formats { position: absolute; right: 110px; top: 50%; transform: translateY(-50%); width: 940px; display: flex; flex-direction: column; gap: 22px; }
+  .ftiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .ft { border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(20,18,12,0.72); padding: 22px 22px 20px; }
+  .ft b { display: block; font-family: 'Jersey 20', sans-serif; font-weight: 400; font-size: 52px; line-height: 1; color: var(--accent-light); margin-bottom: 8px; }
+  .ft span { font-size: 18px; line-height: 1.35; color: rgba(240,240,245,0.55); }
+  .ft.yours b { color: var(--sage); }
+  .card { border-radius: 14px; border: 1px solid rgba(255,255,255,0.09); background: rgba(20,18,12,0.72); padding: 24px 30px; }
+  .card .t { font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(240,240,245,0.45); margin-bottom: 12px; font-weight: 600; }
+  .cells { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 22px; }
+  .cells .bad { color: #f6a35c; } .cells .good { color: var(--sage); } .cells .arr { color: rgba(240,240,245,0.4); font-family: 'Inter'; }
+  .fs { display: flex; gap: 14px; flex-wrap: wrap; }
+  .fs span { font-size: 20px; padding: 9px 18px; border-radius: 999px; border: 1px solid rgba(232,207,106,0.35); color: rgba(240,240,245,0.8); }
+
+  /* delivery choices */
+  .opts { display: flex; flex-direction: column; gap: 10px; }
+  .opt { display: flex; align-items: center; gap: 14px; font-size: 21px; color: rgba(240,240,245,0.7); }
+  .opt i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(240,240,245,0.35); flex: 0 0 auto; }
+  .opt.on { color: var(--off-white); font-weight: 600; }
+  .opt.on i { border-color: var(--accent-light); background: radial-gradient(circle, var(--accent-light) 0 5px, transparent 6px); }
+  .cron { margin-top: 26px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 20px; color: var(--accent-light);
+          background: #14151a; border-radius: 8px; padding: 14px 18px; }
+
+  /* run history */
+  .runs { width: 100%; border-collapse: collapse; font-size: 20px; }
+  .runs th { text-align: left; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,240,245,0.45); padding: 0 12px 10px; font-weight: 600; }
+  .runs td { padding: 13px 12px; border-top: 1px solid rgba(255,255,255,0.07); color: rgba(240,240,245,0.82); white-space: nowrap; }
+  .runs .st { display: inline-flex; align-items: center; gap: 9px; }
+  .runs .st::before { content: ''; width: 11px; height: 11px; border-radius: 50%; background: #5ee0a0; }
+  .runs .st.fail::before { background: #f0605a; }
+  .runs .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .runs tr.fail td { color: rgba(240,240,245,0.6); }
+  .reason { margin-top: 12px; font-size: 18px; color: #f6a35c; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Cover -->
+<section class="slide cover" data-n="1">
+  <div class="inner">
+    <div class="copy">
+      <div class="eyebrow"><span class="rule"></span> Craft CMS 5</div>
+      <h1 class="gradient-text">Reportr</h1>
+      <p class="tagline">Reports for Craft CMS —<br>the Lab Reports replacement.</p>
+      <div class="badges">
+        <span class="badge price">$29 per site</span>
+        <span class="badge">$19/yr updates</span>
+        <span class="badge">One edition</span>
+      </div>
+    </div>
+    <div class="mark"><img src="assets/icon.svg" alt=""></div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 2 · Drop-in -->
+<section class="slide feature" data-n="2">
+  <div class="inner">
+    <div class="copy" style="width: 640px;">
+      <div class="eyebrow"><span class="rule"></span> Coming from Lab Reports</div>
+      <h2>Move in<br>an afternoon</h2>
+      <p class="lede" style="max-width: 620px;">Your report templates run unchanged. So do the formatting functions in <span class="mono">config/labreports.php</span>.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>The importer brings configurations, run history and files across</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Never writes to the Lab Reports tables, and safe to run twice</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="code"><span class="file">templates/_reports/books.twig — unchanged</span><span class="k">{% set</span> columns = [<span class="acc">'ID'</span>, <span class="acc">'Title'</span>, <span class="acc">'Published'</span>, <span class="acc">'Author'</span>] <span class="k">%}</span>
+
+<span class="k">{# No .all() — hand over the query itself. #}</span>
+<span class="k">{% set</span> query = craft.entries.section(<span class="acc">'books'</span>) <span class="k">%}</span>
+
+<span class="hl">{% do report.build(columns, query) %}</span>
+
+<span class="file" style="margin-top:26px">Terminal</span><span class="gold">$</span> php craft reportr/import/lab-reports --dry-run
+<span class="gold">$</span> php craft reportr/import/lab-reports
+
+<span class="k">and in front-end templates, one find-and-replace:</span>
+craft.<span class="k">labreports</span>  →  craft.<span class="acc">reportr</span></div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 3 · Parameters -->
+<section class="slide feature" data-n="3">
+  <div class="inner">
+    <div class="copy" style="width: 620px;">
+      <div class="eyebrow"><span class="rule"></span> Lab Reports’ issue #1</div>
+      <h2>Ask before<br>it runs</h2>
+      <p class="lede" style="max-width: 590px;">Parameters arrive in the template already typed — a <span class="mono">DateTime</span>, an entry, a number.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Thirteen types, from dates to elements to sites</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Relative defaults, so a scheduled run means “the last 30 days” every time</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cp">
+    <div class="bar"><b></b><b></b><b></b><em>Reportr → Monthly orders → Run</em></div>
+    <div class="body">
+      <h3>Run Monthly orders</h3>
+      <div class="row2">
+        <div class="f"><label>Since</label><small>Default <span class="mono">-30 days</span></small><div class="in"><span>2026-09-03</span><span class="typ">Date</span></div></div>
+        <div class="f"><label>Region</label><small>Dropdown</small><div class="in"><span>North</span><span class="typ">Dropdown</span></div></div>
+      </div>
+      <div class="f"><label>Customer</label><small>Leave empty for every customer</small><div class="in"><span class="chip">Hartley &amp; Sons</span><span class="typ">Entries</span></div></div>
+      <div class="row2">
+        <div class="f"><label>Minimum total</label><small>Number</small><div class="in"><span>250</span><span class="typ">Number</span></div></div>
+        <div class="f"><label>Status</label><small>Checkboxes</small><div class="in"><span>Paid, Shipped</span><span class="typ">Checkboxes</span></div></div>
+      </div>
+      <div class="f" style="margin-bottom: 18px;"><small style="margin:0">In the template</small><div class="in mono" style="font-size:19px; background:#14151a"><span><span style="color:#E8CF6A">params.since</span> <span style="color:rgba(240,240,245,.45)">is a DateTime ·</span> <span style="color:#E8CF6A">params.customer</span> <span style="color:rgba(240,240,245,.45)">an entry</span></span></div></div>
+      <div class="btns" style="justify-content:flex-end"><span class="btn">Preview</span><span class="btn go">Run report</span></div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 4 · Query reports -->
+<section class="slide feature" data-n="4">
+  <div class="inner">
+    <div class="copy" style="width: 620px;">
+      <div class="eyebrow"><span class="rule"></span> No template at all</div>
+      <h2>Point, click,<br>export</h2>
+      <p class="lede" style="max-width: 590px;">Choose an element type and one of its sources, then pick the columns. “Members who joined last month” is no longer a deployment.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Related elements, Table fields, one row by index</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Editors only see the sources they can open</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cp">
+    <div class="bar"><b></b><b></b><b></b><em>Reportr → New report → Query</em></div>
+    <div class="body">
+      <div class="row2">
+        <div class="f"><label>Element type</label><div class="in"><span>Entries</span></div></div>
+        <div class="f"><label>Source</label><div class="in"><span>Books</span></div></div>
+      </div>
+      <div class="f" style="margin-bottom:6px"><label>Columns</label></div>
+      <table class="cols">
+        <tr><th>Heading</th><th>Key</th></tr>
+        <tr><td><span class="grip">⋮⋮</span>Title</td><td><code>attr:title</code></td></tr>
+        <tr><td><span class="grip">⋮⋮</span>Author email</td><td><code>attr:author.email</code></td></tr>
+        <tr><td><span class="grip">⋮⋮</span>Series</td><td><code>field:series.title</code></td></tr>
+        <tr><td><span class="grip">⋮⋮</span>Price</td><td><code>field:priceTable.amount</code></td></tr>
+        <tr><td><span class="grip">⋮⋮</span>First edition</td><td><code>field:editions.0.year</code></td></tr>
+        <tr><td><span class="grip">⋮⋮</span>Label</td><td><code class="tw">twig:{{ object.title|upper }}</code></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 5 · Formats -->
+<section class="slide feature" data-n="5">
+  <div class="inner">
+    <div class="copy" style="width: 600px;">
+      <div class="eyebrow"><span class="rule"></span> Out, and somewhere safe</div>
+      <h2>Seven formats,<br>any filesystem</h2>
+      <p class="lede" style="max-width: 570px;">A real Excel workbook with no PhpSpreadsheet, written to S3 or any Craft filesystem, so ephemeral hosting doesn’t lose the archive.</p>
+    </div>
+  </div>
+  <div class="formats">
+    <div class="ftiles">
+      <div class="ft"><b>CSV</b><span>UTF-8 with a BOM, so Excel reads accents</span></div>
+      <div class="ft"><b>XLSX</b><span>Numbers as numbers, postcodes kept</span></div>
+      <div class="ft"><b>JSON</b><span>Keyed by heading</span></div>
+      <div class="ft"><b>NDJSON</b><span>One object per line</span></div>
+      <div class="ft"><b>XML</b><span>Element names that parse</span></div>
+      <div class="ft"><b>TSV</b><span>Tab separated</span></div>
+      <div class="ft"><b>HTML</b><span>A table to email a person</span></div>
+      <div class="ft yours"><b>+ yours</b><span>One interface, no fork</span></div>
+    </div>
+    <div class="card"><div class="t">Formula injection, neutralised by default</div>
+      <div class="cells"><span class="bad">=HYPERLINK("http://…")</span><span class="arr">→</span><span class="good">'=HYPERLINK("http://…")</span></div>
+    </div>
+    <div class="card"><div class="t">Written to</div>
+      <div class="fs"><span>storage/reportr</span><span>Amazon S3</span><span>DigitalOcean Spaces</span><span>any Craft filesystem</span></div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 6 · Scheduling + delivery -->
+<section class="slide feature" data-n="6">
+  <div class="inner">
+    <div class="copy" style="width: 620px;">
+      <div class="eyebrow"><span class="rule"></span> Scheduling and email</div>
+      <h2>Hear about<br>the run that<br>failed</h2>
+      <p class="lede" style="max-width: 590px;">Email on failure only, and a broken Monday export is caught the first Monday, not the fifth.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Wall-clock times that survive daylight saving</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Each run is claimed first, so two schedulers can’t fire it twice</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cp">
+    <div class="bar"><b></b><b></b><b></b><em>Reportr → Weekly sign-ups → Schedule</em></div>
+    <div class="body">
+      <div class="row2">
+        <div class="f"><label>Frequency</label><div class="in"><span>Weekly</span></div></div>
+        <div class="f"><label>On, at</label><div class="in"><span>Monday · 07:00</span></div></div>
+      </div>
+      <div class="f"><label>Next run</label><div class="in"><span>Mon 5 Oct 2026, 07:00</span><span class="resolved">site timezone</span></div></div>
+      <div class="f"><label>Email the file</label><small>One message per recipient. Over the size limit, a link instead.</small>
+        <div class="opts">
+          <div class="opt"><i></i>Never</div>
+          <div class="opt"><i></i>Every run</div>
+          <div class="opt"><i></i>Successful runs only</div>
+          <div class="opt on"><i></i>Failed runs only</div>
+        </div>
+      </div>
+      <div class="f" style="margin-bottom:0"><label>Recipients</label><div class="in mono"><span style="color:#E8CF6A">$REPORT_RECIPIENTS</span></div></div>
+      <div class="cron">* * * * * php craft reportr/schedule/run</div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<!-- 7 · Big reports + close -->
+<section class="slide feature" data-n="7">
+  <div class="inner">
+    <div class="copy" style="width: 640px;">
+      <div class="eyebrow"><span class="rule"></span> $29 per site · $19/yr</div>
+      <h2>Bounded by<br>disk, not<br>memory</h2>
+      <p class="lede" style="max-width: 600px;">Rows stream to the file in batches. Every run records how long it took and what it peaked at.</p>
+      <ul class="points">
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>A build that dies is marked failed, with the reason</span></li>
+        <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8CF6A" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>Run from the control panel, the console, a schedule or Twig</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="cp">
+    <div class="bar"><b></b><b></b><b></b><em>Reportr → Runs</em></div>
+    <div class="body">
+      <table class="runs">
+        <tr><th>Report</th><th>Status</th><th class="num">Rows</th><th class="num">Duration</th><th class="num">Peak</th></tr>
+        <tr><td>Monthly orders</td><td><span class="st">Finished</span></td><td class="num">184,212</td><td class="num">96.4s</td><td class="num">58 MB</td></tr>
+        <tr><td>Weekly sign-ups</td><td><span class="st">Finished</span></td><td class="num">1,906</td><td class="num">2.1s</td><td class="num">34 MB</td></tr>
+        <tr class="fail"><td>Stock levels</td><td><span class="st fail">Failed</span></td><td class="num">—</td><td class="num">0.4s</td><td class="num">31 MB</td></tr>
+        <tr><td>Members export</td><td><span class="st">Finished</span></td><td class="num">42,870</td><td class="num">18.7s</td><td class="num">41 MB</td></tr>
+        <tr><td>Monthly orders</td><td><span class="st">Finished</span></td><td class="num">179,644</td><td class="num">93.0s</td><td class="num">57 MB</td></tr>
+      </table>
+      <div class="reason">Stock levels: Variable “warehouse” does not exist in “_reports/stock.twig” at line 14.</div>
+    </div>
+  </div>
+  <div class="footer"><img src="assets/icon.svg" alt=""> <b>Reportr</b> &nbsp;·&nbsp; justinholt.com/plugins/craft-reportr</div>
+</section>
+
+<script>
+  var n = new URLSearchParams(location.search).get('s');
+  if (n) {
+    document.body.classList.add('single');
+    var el = document.querySelector('.slide[data-n="' + n + '"]');
+    if (el) el.classList.add('active');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="33 36 38 40">
+  <!-- The three bars alone, rounded at the top and running off the bottom edge: the page is a
+       large flat fill, and at watermark scale it reads as a hard-edged box behind the type. -->
+  <g fill="#FEFEFE">
+    <rect x="35" y="61" width="9" height="40" rx="2.5"/>
+    <rect x="47.5" y="50" width="9" height="51" rx="2.5"/>
+    <rect x="60" y="39" width="9" height="62" rx="2.5"/>
+  </g>
+</svg>

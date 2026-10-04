@@ -6,7 +6,6 @@ namespace justinholtweb\reportr\elements;
 
 use Craft;
 use craft\base\Element;
-use craft\elements\db\ElementQueryInterface;
 use craft\elements\User;
 use craft\enums\Color;
 use craft\helpers\Db;
@@ -16,6 +15,7 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use DateTime;
 use justinholtweb\reportr\elements\db\ReportQuery;
+use justinholtweb\reportr\helpers\Access;
 use justinholtweb\reportr\models\Delivery;
 use justinholtweb\reportr\models\FormatOptions;
 use justinholtweb\reportr\models\Parameter;
@@ -158,7 +158,7 @@ class Report extends Element
         return false;
     }
 
-    public static function find(): ElementQueryInterface
+    public static function find(): ReportQuery
     {
         return new ReportQuery(static::class);
     }
@@ -369,7 +369,6 @@ class Report extends Element
         }
 
         if ($this->type === self::TYPE_ADVANCED
-            && $this->formatFunction
             && Plugin::getInstance()->reports->formatFunction($this->formatFunction) === null) {
             return Craft::t('reportr', 'The formatting function “{name}” is not defined in config/reportr.php.', [
                 'name' => $this->formatFunction,
@@ -407,8 +406,108 @@ class Report extends Element
         $rules[] = [['formatFunction'], 'string', 'max' => 100];
         $rules[] = [['template'], 'required', 'when' => fn(self $report) => $report->getUsesTemplate()];
         $rules[] = [['formatFunction'], 'required', 'when' => fn(self $report) => $report->type === self::TYPE_ADVANCED];
+        $rules[] = [['querySpec'], 'validateAccess', 'skipOnEmpty' => false];
+        $rules[] = [['params'], 'validateParamNames', 'skipOnEmpty' => false];
+        $rules[] = [['fsSubpath'], 'match', 'not' => true, 'pattern' => '#(^|[/\\\\])\.\.([/\\\\]|$)#', 'message' => Craft::t('reportr', 'The folder can’t step outside the filesystem with “..”.')];
 
         return $rules;
+    }
+
+    /**
+     * Someone who isn't an admin may only build a report over content they can view, and may not
+     * change what the report runs or where its output goes. See helpers\Access.
+     *
+     * Admin-only, whatever the type: the type itself, the template and formatting function (code
+     * that runs), a `twig:` column, the filesystem, folder and filename (where a file lands, and
+     * so what it can overwrite). Changing who is emailed the output takes permission to download
+     * it, since that is what an email with the file attached is. A column that reaches a user —
+     * `author.email` — takes permission to view users.
+     *
+     * Only what changed is checked: editing the title of a report an admin built over users does
+     * not need the users permission, and a `twig:` column an admin wrote can be kept or removed.
+     * Console runs and code with nobody signed in are trusted.
+     */
+    public function validateAccess(string $attribute): void
+    {
+        if (Craft::$app->getRequest()->getIsConsoleRequest()) {
+            return;
+        }
+
+        $user = Craft::$app->getUser()->getIdentity();
+
+        if ($user === null || $user->admin) {
+            return;
+        }
+
+        $stored = $this->id ? ReportRecord::findOne($this->id) : null;
+        $adminOnly = Craft::t('reportr', 'Only an admin can change this.');
+
+        $changed = static fn(?string $now, ?string $was): bool => ($now ?: null) !== ($was ?: null);
+
+        if ($stored === null ? $this->type !== self::TYPE_QUERY : $changed($this->type, $stored->type)) {
+            $this->addError('type', Craft::t('reportr', 'Only an admin can create or change a report that runs a template.'));
+        }
+
+        foreach (['template', 'formatFunction', 'fsHandle', 'fsSubpath', 'filenameFormat'] as $name) {
+            if ($changed($this->$name, $stored?->$name)) {
+                $this->addError($name, $adminOnly);
+            }
+        }
+
+        $delivery = $this->getDelivery()->toArray();
+        $storedDelivery = Delivery::fromArray($stored ? $this->decode($stored->delivery) : null)->toArray();
+        $who = static fn(array $d): array => [$d['when'] === Delivery::WHEN_NEVER ? [] : $d['recipients'], $d['recipients'] === [] ? null : $d['attach']];
+
+        if ($who($delivery) !== $who($storedDelivery) && !$user->can(Plugin::PERMISSION_DOWNLOAD_RUNS)) {
+            $this->addError('delivery', Craft::t('reportr', 'Choosing who is sent a report’s output takes permission to download it.'));
+        }
+
+        if ($this->type !== self::TYPE_QUERY) {
+            return;
+        }
+
+        $spec = $this->getQuerySpec();
+        $storedSpec = $stored ? QuerySpec::fromArray($this->decode($stored->querySpec)) : null;
+        $sourceChanged = $storedSpec === null
+            || $storedSpec->elementType !== $spec->elementType
+            || $storedSpec->source !== $spec->source
+            || $stored->type !== self::TYPE_QUERY;
+
+        if ($sourceChanged && ($reason = Access::whyNotSource($spec, $user)) !== null) {
+            $this->addError($attribute, $reason);
+        }
+
+        $added = array_diff(Access::twigColumns($spec), $storedSpec ? Access::twigColumns($storedSpec) : []);
+
+        if ($added !== []) {
+            $this->addError($attribute, Craft::t('reportr', 'Only an admin can add or change a Twig column ({column}).', [
+                'column' => mb_strimwidth((string)reset($added), 0, 60, '…'),
+            ]));
+        }
+
+        if (!$user->can('viewUsers')) {
+            $reachUsers = array_diff(Access::userColumns($spec), $storedSpec ? Access::userColumns($storedSpec) : []);
+
+            if ($reachUsers !== []) {
+                $this->addError($attribute, Craft::t('reportr', 'You can’t view users, so you can’t add a column that reads them ({column}).', [
+                    'column' => mb_strimwidth((string)reset($reachUsers), 0, 60, '…'),
+                ]));
+            }
+        }
+    }
+
+    /**
+     * Parameter names that are element-query machinery rather than filters — `where`, `orderBy`,
+     * `editable` — are refused for everyone. They would not reach the query anyway (only
+     * QueryBuilder::QUERY_PARAMS do), and a parameter that silently does nothing misleads.
+     */
+    public function validateParamNames(string $attribute): void
+    {
+        foreach ($this->getParams() as $param) {
+            if (Parameter::isReservedName($param->name)) {
+                $this->addError($attribute, Craft::t('reportr', '“{name}” is reserved and can’t be a parameter name.', ['name' => $param->name]));
+            }
+        }
     }
 
     /**
@@ -443,6 +542,26 @@ class Report extends Element
         if (!Plugin::getInstance()->formats->has($this->format)) {
             $this->addError('format', Craft::t('reportr', 'Unknown export format.'));
         }
+    }
+
+    /**
+     * A copy made by Craft's Duplicate action starts life as a new report, not a twin.
+     *
+     * Craft validates the copy before saving it, so the original's handle fails uniqueness and the
+     * action fails outright. The import marker, the counters and — because a copy of a scheduled
+     * report would otherwise start mailing its recipients twice — the enabled state are reset too.
+     */
+    public function beforeValidate(): bool
+    {
+        if ($this->duplicateOf !== null && !$this->id) {
+            $this->handle = $this->generateHandle($this->handle ?: (string)$this->title);
+            $this->legacyId = null;
+            $this->runCount = 0;
+            $this->lastRunAt = null;
+            $this->enabled = false;
+        }
+
+        return parent::beforeValidate();
     }
 
     public function beforeSave(bool $isNew): bool

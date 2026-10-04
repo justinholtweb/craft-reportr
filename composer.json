@@ -16,7 +16,7 @@
         "lab-reports"
     ],
     "license": "proprietary",
-    "homepage": "https://craft-reportr.com",
+    "homepage": "https://justinholt.com/plugins/craft-reportr",
     "authors": [
         {
             "name": "Justin Holt",
@@ -25,8 +25,9 @@
     ],
     "support": {
         "email": "justin@justinholt.com",
-        "issues": "https://github.com/justinholtweb/craft-reportr/issues",
-        "source": "https://github.com/justinholtweb/craft-reportr"
+        "docs": "https://justinholt.com/plugins/craft-reportr/docs",
+        "source": "https://github.com/justinholtweb/craft-reportr",
+        "issues": "https://github.com/justinholtweb/craft-reportr/issues"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
@@ -34,6 +35,16 @@
         "php": "^8.2",
         "ext-json": "*",
         "craftcms/cms": "^5.3.0"
+    },
+    "require-dev": {
+        "craftcms/ecs": "dev-main",
+        "craftcms/phpstan": "dev-main",
+        "phpstan/phpstan": "^1.12 || ^2.2"
+    },
+    "scripts": {
+        "check-cs": "ecs check --ansi",
+        "fix-cs": "ecs check --ansi --fix",
+        "phpstan": "phpstan --memory-limit=1G"
     },
     "suggest": {
         "ext-zip": "Required for the XLSX export format."
@@ -46,7 +57,8 @@
     "config": {
         "allow-plugins": {
             "craftcms/plugin-installer": true,
-            "yiisoft/yii2-composer": true
+            "yiisoft/yii2-composer": true,
+            "craftcms/generator": true
         },
         "sort-packages": true
     },
@@ -55,7 +67,7 @@
         "handle": "reportr",
         "developer": "Justin Holt",
         "developerUrl": "https://justinholt.com",
-        "documentationUrl": "https://github.com/justinholtweb/craft-reportr/blob/main/README.md",
+        "documentationUrl": "https://justinholt.com/plugins/craft-reportr/docs",
         "changelogUrl": "https://raw.githubusercontent.com/justinholtweb/craft-reportr/main/CHANGELOG.md",
         "class": "justinholtweb\\reportr\\Plugin",
         "hasCpSettings": true

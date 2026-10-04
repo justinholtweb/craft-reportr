@@ -7,8 +7,8 @@ namespace justinholtweb\reportr\services;
 use Craft;
 use craft\base\Component;
 use craft\helpers\StringHelper;
-use justinholtweb\reportr\elements\Report;
 use justinholtweb\reportr\elements\db\ReportQuery;
+use justinholtweb\reportr\elements\Report;
 use justinholtweb\reportr\models\Parameter;
 use justinholtweb\reportr\Plugin;
 

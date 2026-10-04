@@ -11,6 +11,7 @@ use craft\events\RegisterComponentTypesEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\helpers\UrlHelper;
+use craft\log\MonologTarget;
 use craft\services\Elements;
 use craft\services\Gc;
 use craft\services\UserPermissions;
@@ -30,6 +31,8 @@ use justinholtweb\reportr\services\Schedules;
 use justinholtweb\reportr\services\Storage;
 use justinholtweb\reportr\twig\Extension;
 use justinholtweb\reportr\twig\ReportrVariable;
+use Monolog\Formatter\LineFormatter;
+use Psr\Log\LogLevel;
 use yii\base\Event;
 
 /**
@@ -94,6 +97,7 @@ class Plugin extends BasePlugin
     {
         parent::init();
 
+        $this->registerLogTarget();
         $this->registerElementTypes();
         $this->registerRoutes();
         $this->registerPermissions();
@@ -116,6 +120,41 @@ class Plugin extends BasePlugin
     public function getSettingsResponse(): mixed
     {
         return Craft::$app->getResponse()->redirect(UrlHelper::cpUrl('reportr/settings'));
+    }
+
+    /**
+     * `storage/logs/reportr.log`, which the settings screen and the README both promise.
+     *
+     * Everything is logged under the `reportr` category already; without a target of its own it
+     * lands in web.log, console.log or queue.log depending on who happened to run the build.
+     */
+    private function registerLogTarget(): void
+    {
+        $dispatcher = Craft::getLogger()->dispatcher;
+
+        // A web request and a queue job both boot the plugin; the dispatcher is shared.
+        if (isset($dispatcher->targets['reportr'])) {
+            return;
+        }
+
+        $dispatcher->targets['reportr'] = new MonologTarget([
+            'name' => 'reportr',
+            'categories' => ['reportr'],
+            'level' => $this->getSettings()->debug ? LogLevel::DEBUG : LogLevel::INFO,
+            'logContext' => false,
+            'allowLineBreaks' => true,
+            'formatter' => new LineFormatter(
+                format: "%datetime% [%level_name%] %message%\n",
+                dateFormat: 'Y-m-d H:i:s',
+                allowInlineLineBreaks: true,
+            ),
+        ]);
+    }
+
+    /** The same screen, which renders read-only when admin changes are switched off. */
+    public function getReadOnlySettingsResponse(): mixed
+    {
+        return $this->getSettingsResponse();
     }
 
     public function getCpNavItem(): ?array

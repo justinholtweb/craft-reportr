@@ -3,12 +3,35 @@
 
 {% set selectedSubnavItem = 'settings' %}
 {% set title = 'Reportr settings'|t('reportr') %}
-{% set fullPageForm = true %}
+{# With admin changes off, settings can be read but not saved: there is no form to submit. #}
+{% set fullPageForm = not readOnly %}
 {% set crumbs = [{ label: 'Reportr'|t('reportr'), url: url('reportr/reports') }] %}
 
+{# Rendered in the Schedules section normally, and after the disabled fieldset when settings are
+   read-only — the refresh is runtime data, not project config. #}
+{% set refreshSchedules %}
+    {{ forms.field({
+        label: 'Next run times'|t('reportr'),
+        instructions: 'Recalculate them after a timezone change, or a database restored from another machine.'|t('reportr'),
+    }, forms.button({
+        id: 'reportr-refresh-schedules',
+        label: 'Recalculate every schedule'|t('reportr'),
+        spinner: true,
+    })) }}
+{% endset %}
+
 {% block content %}
-    <input type="hidden" name="action" value="reportr/settings/save">
-    {{ redirectInput('reportr/settings') }}
+    {% if readOnly %}
+        <p class="notice has-icon">
+            <span class="icon" aria-hidden="true"></span>
+            <span class="visually-hidden">{{ 'Notice:'|t('app') }}</span>
+            <span>{{ 'Admin changes are switched off in this environment, so these settings can be read but not saved.'|t('reportr') }}</span>
+        </p>
+        <fieldset disabled class="reportr-read-only">
+    {% else %}
+        {{ actionInput('reportr/settings/save') }}
+        {{ redirectInput('reportr/settings') }}
+    {% endif %}
 
     <h2>{{ 'Where report files go'|t('reportr') }}</h2>
 
@@ -28,9 +51,11 @@
         value: settings.fsSubpath,
     }) }}
 
-    {{ forms.textField({
+    {{ forms.autosuggestField({
         label: 'Local folder'|t('reportr'),
-        instructions: 'Used when no filesystem is chosen. Leave it blank for `storage/reportr`. Environment variables work here.'|t('reportr')|md(inlineOnly=true),
+        instructions: 'Used when no filesystem is chosen. Leave it blank for `storage/reportr`. Environment variables and aliases work here.'|t('reportr')|md(inlineOnly=true),
+        suggestEnvVars: true,
+        suggestAliases: true,
         name: 'settings[storageFolder]',
         class: 'code',
         placeholder: storagePath,
@@ -45,6 +70,7 @@
         instructions: 'Seconds a queued build may take before the queue reclaims it. Craft’s own default is 300, which is where "exceeded the timeout of 300 seconds" comes from on a report that has grown.'|t('reportr'),
         name: 'settings[jobTtr]',
         type: 'number',
+        unit: 'seconds'|t('reportr'),
         size: 8,
         value: settings.jobTtr,
         errors: settings.getErrors('jobTtr'),
@@ -55,6 +81,7 @@
         instructions: 'Rows fetched at a time while walking a query. Lower it if a report runs out of memory; raise it for speed on a machine with room.'|t('reportr'),
         name: 'settings[batchSize]',
         type: 'number',
+        unit: 'rows'|t('reportr'),
         size: 8,
         value: settings.batchSize,
         errors: settings.getErrors('batchSize'),
@@ -70,9 +97,10 @@
 
     {{ forms.textField({
         label: 'Time limit'|t('reportr'),
-        instructions: 'Seconds, applied for the duration of a build. 0 leaves PHP’s own setting alone.'|t('reportr'),
+        instructions: 'Applied for the duration of a build. 0 leaves PHP’s own setting alone.'|t('reportr'),
         name: 'settings[timeLimit]',
         type: 'number',
+        unit: 'seconds'|t('reportr'),
         size: 8,
         value: settings.timeLimit,
         errors: settings.getErrors('timeLimit'),
@@ -82,6 +110,7 @@
         label: 'Preview rows'|t('reportr'),
         name: 'settings[previewRows]',
         type: 'number',
+        unit: 'rows'|t('reportr'),
         size: 8,
         value: settings.previewRows,
         errors: settings.getErrors('previewRows'),
@@ -92,27 +121,30 @@
 
     {{ forms.textField({
         label: 'Keep the last'|t('reportr'),
-        instructions: 'runs of each report. 0 keeps everything.'|t('reportr'),
+        instructions: '0 keeps everything.'|t('reportr'),
         name: 'settings[retentionRuns]',
         type: 'number',
+        unit: 'runs of each report'|t('reportr'),
         size: 6,
         value: settings.retentionRuns,
     }) }}
 
     {{ forms.textField({
         label: 'Keep runs for'|t('reportr'),
-        instructions: 'days. 0 keeps everything.'|t('reportr'),
+        instructions: '0 keeps everything.'|t('reportr'),
         name: 'settings[retentionDays]',
         type: 'number',
+        unit: 'days'|t('reportr'),
         size: 6,
         value: settings.retentionDays,
     }) }}
 
     {{ forms.textField({
         label: 'Largest email attachment'|t('reportr'),
-        instructions: 'Megabytes. Over this, delivery emails carry a link instead of the file.'|t('reportr'),
+        instructions: 'Over this, delivery emails carry a link instead of the file.'|t('reportr'),
         name: 'settings[maxAttachmentMb]',
         type: 'number',
+        unit: 'MB',
         size: 6,
         value: settings.maxAttachmentMb,
     }) }}
@@ -127,12 +159,9 @@
         on: settings.runScheduleAutomatically,
     }) }}
 
-    <div class="field">
-        <div class="input">
-            <button type="button" id="reportr-refresh-schedules" class="btn">{{ 'Recalculate every schedule'|t('reportr') }}</button>
-            <div class="light">{{ 'After a timezone change, or a database restored from another machine.'|t('reportr') }}</div>
-        </div>
-    </div>
+    {% if not readOnly %}
+        {{ refreshSchedules }}
+    {% endif %}
 
     <hr>
     <h2>{{ 'Compatibility'|t('reportr') }}</h2>
@@ -145,7 +174,7 @@
     }) }}
 
     {% if importAvailable %}
-        <p><a href="{{ url('reportr/import') }}">{{ 'Import from Lab Reports →'|t('reportr') }}</a></p>
+        <p><a class="go" href="{{ url('reportr/import') }}">{{ 'Import from Lab Reports'|t('reportr') }}</a></p>
     {% endif %}
 
     {{ forms.lightswitchField({
@@ -154,36 +183,53 @@
         name: 'settings[debug]',
         on: settings.debug,
     }) }}
+
+    {% if readOnly %}
+        </fieldset>
+        <hr>
+        {# Runtime data, not project config, so it works whatever the environment. #}
+        {{ refreshSchedules }}
+    {% endif %}
 {% endblock %}
 
 {% block details %}
-    <div class="meta read-only">
+    <dl class="meta read-only">
         <div class="data">
-            <div class="heading">{{ 'Formatting functions'|t('reportr') }}</div>
-            <div class="value">
+            <dt class="heading">{{ 'Formatting functions'|t('reportr') }}</dt>
+            <dd class="value">
                 {% if functionNames|length %}
                     {% for name in functionNames %}<code class="small">{{ name }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}
                 {% else %}
                     <span class="light">{{ 'None defined'|t('reportr') }}</span>
                 {% endif %}
-            </div>
+            </dd>
         </div>
         <div class="data">
-            <div class="heading">{{ 'Formats'|t('reportr') }}</div>
-            <div class="value">
+            <dt class="heading">{{ 'Formats'|t('reportr') }}</dt>
+            <dd class="value">
                 {% if unsupported|length %}
                     <span class="error">{{ 'Not available here: {list}'|t('reportr', { list: unsupported|join(', ')|upper }) }}</span>
                 {% else %}
                     {{ 'All available'|t('reportr') }}
                 {% endif %}
-            </div>
+            </dd>
         </div>
-    </div>
+    </dl>
 {% endblock %}
+
+{% do view.registerTranslations('reportr', [
+    'Schedules recalculated.',
+    'Couldn’t recalculate the schedules.',
+]) %}
 
 {% js %}
 document.getElementById('reportr-refresh-schedules').addEventListener('click', function(event) {
     var button = event.currentTarget;
+
+    if (button.classList.contains('loading')) {
+        return;
+    }
+
     button.classList.add('loading');
 
     Craft.sendActionRequest('POST', 'reportr/settings/refresh-schedules')

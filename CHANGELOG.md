@@ -1,6 +1,6 @@
 # Release Notes for Reportr
 
-## 5.0.0 — 2026-08-27
+## 5.0.0 - 2026-10-03
 
 Initial release.
 
@@ -8,6 +8,24 @@ Reportr is a replacement for [Lab Reports](https://github.com/masugadesign/lab-r
 which stopped taking new features. It keeps that plugin's template contract exactly — the same
 `report` variable, the same `build()` signatures, the same formatting-function config — and then
 implements the things its issue tracker and its own roadmap asked for.
+
+### Who can report on what
+
+- Someone who isn't an admin can only build a report over an element type and source they can
+  view in the control panel — not "All entries", which reaches sections they can't open, and not
+  users, orders or products without those permissions.
+- `twig:` columns are Twig, not a sandbox, so only an admin can add or change one.
+- No column reads a user's password hash, verification code or similar, whatever the path.
+- **Order by** must be a column name; an expression is ignored rather than run as SQL.
+- A report's output folder can't step outside its filesystem with `..`.
+- A column can't walk out of the element graph into settings objects (a volume's filesystem
+  credentials, say), and one that reaches a user needs permission to view users.
+- Parameters apply to a query only through a fixed set of query params, can only narrow the
+  report's source, and can't be named after query machinery such as `where` or `orderBy`.
+- Someone who isn't an admin can't change a report's type, template, formatting function, storage
+  location or filename pattern, nor its recipients without permission to download its files.
+- Parameter labels and instructions reach the run form as text, never markup.
+- Starting a run is a POST; following a link to a report only shows its run form.
 
 ### Compatible with Lab Reports
 

@@ -153,8 +153,7 @@ class Schedule extends Model
                 self::FREQUENCY_HOURLY => $next->modify('+1 hour'),
                 self::FREQUENCY_DAILY => $next->modify('+1 day'),
                 self::FREQUENCY_WEEKLY => $next->modify('+7 days'),
-                self::FREQUENCY_MONTHLY => $this->clampToMonth((clone $next)->modify('first day of next month'), $hour, $minute),
-                default => $next->modify('+1 day'),
+                default => $this->clampToMonth((clone $next)->modify('first day of next month'), $hour, $minute),
             };
         }
 

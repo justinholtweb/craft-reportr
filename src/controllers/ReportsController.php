@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace justinholtweb\reportr\controllers;
 
 use Craft;
-use craft\helpers\Json;
-use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use justinholtweb\reportr\elements\Report;
 use justinholtweb\reportr\elements\Run;
@@ -181,8 +179,8 @@ class ReportsController extends Controller
     /**
      * The run screen.
      *
-     * A GET because a report with parameters has to ask them first, and because "run this
-     * report" is a link somebody wants to bookmark. The POST from that form does the work.
+     * A GET shows the form — a report with parameters has to ask them first, and "run this report"
+     * is a link somebody wants to bookmark. Only the POST from that form, CSRF-checked, does the work.
      */
     public function actionRun(?int $reportId = null): Response
     {
@@ -199,12 +197,8 @@ class ReportsController extends Controller
         $raw = is_array($raw) ? $raw : [];
 
         if (!$this->request->getIsPost()) {
-            // No parameters and nothing to ask: run it straight away rather than showing a form
-            // whose only control is the button.
-            if (!$report->getHasParams()) {
-                return $this->startRun($report, []);
-            }
-
+            // Always a form, even with nothing to ask: a GET must not start a build, or any page
+            // that can make the browser follow a link can run a report as whoever is signed in.
             return $this->renderTemplate('reportr/reports/_run', [
                 'report' => $report,
                 'values' => Plugin::getInstance()->reports->normalizeParams($report, $raw),

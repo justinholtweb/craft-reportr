@@ -13,7 +13,6 @@ namespace justinholtweb\reportr\writers;
  */
 class NdjsonWriter extends BaseWriter
 {
-
     public static function extension(): string
     {
         return 'ndjson';

@@ -5,6 +5,26 @@
 {% set fullPageForm = true %}
 {% set crumbs = [{ label: 'Reports'|t('reportr'), url: url('reportr/reports') }] %}
 
+{# Delete posts the page form through Craft's own action menu, so there is no second form to
+   nest and no custom JavaScript to keep in step with it. #}
+{% set formActions = not isNew ? [{
+    label: 'Delete'|t('app'),
+    action: 'reportr/reports/delete',
+    redirect: 'reportr/reports'|hash,
+    destructive: true,
+    confirm: 'Delete this report? Its past runs are kept.'|t('reportr'),
+}] : null %}
+
+{% if not isNew and not report.blockingProblem %}
+    {% set additionalButtons %}
+        <a href="{{ report.runUrl }}" class="btn">{{ 'Run report'|t('reportr') }}</a>
+    {% endset %}
+{% endif %}
+
+{% do view.registerTranslations('reportr', [
+    'Save and reopen this report to refresh the column list.',
+]) %}
+
 {% set spec = report.querySpec %}
 {% set options = report.formatOptions %}
 {% set schedule = report.schedule %}
@@ -34,7 +54,7 @@
 {% endfor %}
 
 {% block content %}
-    <input type="hidden" name="action" value="reportr/reports/save">
+    {{ actionInput('reportr/reports/save') }}
     {{ redirectInput('reportr/reports/{id}') }}
     {% if not isNew %}<input type="hidden" name="reportId" value="{{ report.id }}">{% endif %}
 
@@ -99,7 +119,11 @@
             }) }}
 
             {% if functionOptions|length <= 1 %}
-                <p class="warning">{{ 'No formatting functions are defined. Add them to the `functions` array in `config/reportr.php`.'|t('reportr')|md(inlineOnly=true) }}</p>
+                <p class="warning has-icon">
+                    <span class="icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">{{ 'Warning:'|t('app') }}</span>
+                    <span>{{ 'No formatting functions are defined. Add them to the `functions` array in `config/reportr.php`.'|t('reportr')|md(inlineOnly=true) }}</span>
+                </p>
             {% endif %}
         </div>
     </div>
@@ -427,7 +451,8 @@
     <div class="flex">
         {{ forms.textField({
             label: 'Keep the last'|t('reportr'),
-            instructions: 'runs. Blank uses the site default.'|t('reportr'),
+            instructions: 'Blank uses the site default.'|t('reportr'),
+            unit: 'runs'|t('reportr'),
             name: 'retentionRuns',
             type: 'number',
             size: 6,
@@ -436,7 +461,8 @@
 
         {{ forms.textField({
             label: 'Keep for'|t('reportr'),
-            instructions: 'days. Blank uses the site default.'|t('reportr'),
+            instructions: 'Blank uses the site default.'|t('reportr'),
+            unit: 'days'|t('reportr'),
             name: 'retentionDays',
             type: 'number',
             size: 6,
@@ -456,49 +482,45 @@
 
 {% block details %}
     <div class="meta">
-        {{ forms.lightswitchField({
-            label: 'Enabled'|t('app'),
-            name: 'enabled',
-            on: report.enabled,
-        }) }}
+        <div class="flex-fields">
+            {{ forms.lightswitchField({
+                label: 'Enabled'|t('app'),
+                name: 'enabled',
+                on: report.enabled,
+            }) }}
+        </div>
     </div>
 
     {% if not isNew %}
-        <div class="meta read-only">
+        <dl class="meta read-only">
             <div class="data">
-                <div class="heading">{{ 'Runs'|t('reportr') }}</div>
-                <div class="value"><a href="{{ url('reportr/runs', { reportId: report.id }) }}">{{ report.runCount }}</a></div>
+                <dt class="heading">{{ 'Runs'|t('reportr') }}</dt>
+                <dd class="value"><a href="{{ url('reportr/runs', { reportId: report.id }) }}">{{ report.runCount|number }}</a></dd>
             </div>
             {% if report.lastRunAt %}
                 <div class="data">
-                    <div class="heading">{{ 'Last run'|t('reportr') }}</div>
-                    <div class="value">{{ report.lastRunAt|datetime('short') }}</div>
+                    <dt class="heading">{{ 'Last run'|t('reportr') }}</dt>
+                    <dd class="value">{{ report.lastRunAt|datetime('short') }}</dd>
                 </div>
             {% endif %}
             {% if report.nextRunAt %}
                 <div class="data">
-                    <div class="heading">{{ 'Next run'|t('reportr') }}</div>
-                    <div class="value">{{ report.nextRunAt|datetime('short') }}</div>
+                    <dt class="heading">{{ 'Next run'|t('reportr') }}</dt>
+                    <dd class="value">{{ report.nextRunAt|datetime('short') }}</dd>
                 </div>
             {% endif %}
-        </div>
+        </dl>
 
         {% set problem = report.blockingProblem %}
         {% if problem %}
-            <p class="error" style="padding: 0 24px;">{{ problem }}</p>
-        {% else %}
-            <div class="buttons" style="padding: 0 24px;">
-                <a href="{{ report.runUrl }}" class="btn">{{ 'Run report'|t('reportr') }}</a>
+            <div class="meta">
+                <p class="error has-icon">
+                    <span class="icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">{{ 'Error:'|t('app') }}</span>
+                    <span>{{ problem }}</span>
+                </p>
             </div>
         {% endif %}
-
-        {# Posted from JavaScript, never as a nested <form>. A form inside the page form is
-           invalid HTML: the parser drops the inner tag and keeps its children, so a hidden
-           `action=…/delete` ends up beside the save action and clicking Save deletes the
-           report. #}
-        <div class="buttons" style="padding: 0 24px 24px;">
-            <button type="button" id="reportr-delete" class="btn delete">{{ 'Delete'|t('app') }}</button>
-        </div>
     {% endif %}
 {% endblock %}
 
@@ -579,27 +601,6 @@
                 // as in the DOM, so a fresh row would otherwise offer the old element type's
                 // columns. Tell the user rather than half-updating it.
                 Craft.cp.displayNotice(Craft.t('reportr', 'Save and reopen this report to refresh the column list.'));
-            });
-        });
-    }
-
-    var deleteButton = document.getElementById('reportr-delete');
-
-    if (deleteButton) {
-        deleteButton.addEventListener('click', function() {
-            if (!confirm(Craft.t('reportr', 'Delete this report? Its past runs are kept.'))) {
-                return;
-            }
-
-            deleteButton.classList.add('loading');
-
-            Craft.sendActionRequest('POST', 'reportr/reports/delete', {
-                data: { reportId: {{ report.id ?? 'null' }} }
-            }).then(function() {
-                window.location.href = Craft.getCpUrl('reportr/reports');
-            }).catch(function() {
-                deleteButton.classList.remove('loading');
-                Craft.cp.displayError(Craft.t('reportr', 'Couldn’t delete the report.'));
             });
         });
     }

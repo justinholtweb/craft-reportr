@@ -20,7 +20,9 @@ class ImportController extends Controller
             return false;
         }
 
-        $this->requireAdmin();
+        // Admin, but not admin *changes*: production sites switch those off, and the importer, the
+        // schedule refresh and reading the settings are not project config.
+        $this->requireAdmin(false);
 
         return true;
     }

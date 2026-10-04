@@ -20,8 +20,9 @@ use craft\helpers\StringHelper;
  *   how a Table field's column gets out. This is Lab Reports issue #3, which was closed by
  *   telling the reporter to write more Twig.
  * - `twig:{{ object.title|upper }} ({{ object.id }})` — an object template, for the row nobody
- *   anticipated. Evaluated by Craft's own `renderObjectTemplate()`, so it is the same sandbox as
- *   a dynamic entry title and not a second one to audit.
+ *   anticipated. Evaluated by Craft's `renderObjectTemplate()`, which is **not** a sandbox: it can
+ *   reach `craft.app` and anything else Twig can. So only an admin may add or change one (see
+ *   helpers\Access and Report::validateAccess()); everyone else can keep or remove an admin's.
  */
 class Column extends Model
 {

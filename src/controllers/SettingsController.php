@@ -9,6 +9,9 @@ use craft\web\Controller;
 use justinholtweb\reportr\Plugin;
 use yii\web\Response;
 
+/**
+ * Reportr's own settings screen, plus the one maintenance action that sits on it.
+ */
 class SettingsController extends Controller
 {
     public function beforeAction($action): bool
@@ -17,7 +20,9 @@ class SettingsController extends Controller
             return false;
         }
 
-        $this->requireAdmin();
+        // Admin, but not admin *changes*: production sites switch those off, and the importer, the
+        // schedule refresh and reading the settings are not project config.
+        $this->requireAdmin(false);
 
         return true;
     }
@@ -38,12 +43,15 @@ class SettingsController extends Controller
                 static fn(string $format) => !$plugin->formats->isSupported($format),
             )),
             'importAvailable' => $plugin->importer->isAvailable(),
+            'readOnly' => !Craft::$app->getConfig()->getGeneral()->allowAdminChanges,
         ]);
     }
 
     public function actionSave(): ?Response
     {
         $this->requirePostRequest();
+        // Plugin settings live in project config.
+        $this->requireAdmin();
 
         $plugin = Plugin::getInstance();
         $settings = $plugin->getSettings();
@@ -79,8 +87,13 @@ class SettingsController extends Controller
         $this->requirePostRequest();
 
         $count = Plugin::getInstance()->schedules->refreshAll();
+        $message = Craft::t('reportr', '{count} schedules recalculated.', ['count' => $count]);
 
-        $this->setSuccessFlash(Craft::t('reportr', '{count} schedules recalculated.', ['count' => $count]));
+        if ($this->request->getAcceptsJson()) {
+            return $this->asSuccess($message);
+        }
+
+        $this->setSuccessFlash($message);
 
         return $this->redirect('reportr/settings');
     }

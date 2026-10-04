@@ -1,0 +1,8 @@
+{# Semantic status colours: pending while a run is waiting or building, on once it has a file. #}
+{% set classes = {
+    queued: 'pending',
+    running: 'pending',
+    finished: 'on',
+    error: 'red',
+} %}
+<span class="status {{ classes[status] ?? 'off' }}" aria-hidden="true"></span>
